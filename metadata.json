@@ -1,0 +1,6 @@
+{
+  "name": "Sera Akisos",
+  "description": "Biblioteca inteligente de entretenimento com sistema de roleta integrada para filmes, séries e animes.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
