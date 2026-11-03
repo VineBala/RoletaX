@@ -59,7 +59,7 @@ class TitleSearchService {
             val url = "https://api.jikan.moe/v4/anime?q=$encodedQuery&limit=8"
             val request = Request.Builder()
                 .url(url)
-                .header("User-Agent", "SeraAkisos-App/2.0")
+                .header("User-Agent", "Vortex-App/2.0")
                 .build()
             val response = client.newCall(request).execute()
             if (!response.isSuccessful) return emptyList()
@@ -134,7 +134,7 @@ class TitleSearchService {
             val url = "https://api.jikan.moe/v4/anime/$malId/episodes?limit=1"
             val request = Request.Builder()
                 .url(url)
-                .header("User-Agent", "SeraAkisos-App/2.0")
+                .header("User-Agent", "Vortex-App/2.0")
                 .build()
             val response = client.newCall(request).execute()
             if (response.isSuccessful) {
@@ -163,7 +163,7 @@ class TitleSearchService {
             val url = "https://api.tvmaze.com/search/shows?q=$encodedQuery"
             val request = Request.Builder()
                 .url(url)
-                .header("User-Agent", "SeraAkisos-App/2.0")
+                .header("User-Agent", "Vortex-App/2.0")
                 .build()
             val response = client.newCall(request).execute()
             if (!response.isSuccessful) return emptyList()
@@ -242,7 +242,7 @@ class TitleSearchService {
             val seasonsUrl = "https://api.tvmaze.com/shows/$showId/seasons"
             val seasonsReq = Request.Builder()
                 .url(seasonsUrl)
-                .header("User-Agent", "SeraAkisos-App/2.0")
+                .header("User-Agent", "Vortex-App/2.0")
                 .build()
             val seasonsResp = client.newCall(seasonsReq).execute()
             if (seasonsResp.isSuccessful) {
@@ -282,7 +282,7 @@ class TitleSearchService {
             val episodesUrl = "https://api.tvmaze.com/shows/$showId/episodes"
             val episodesReq = Request.Builder()
                 .url(episodesUrl)
-                .header("User-Agent", "SeraAkisos-App/2.0")
+                .header("User-Agent", "Vortex-App/2.0")
                 .build()
             val episodesResp = client.newCall(episodesReq).execute()
             if (episodesResp.isSuccessful) {
@@ -321,7 +321,7 @@ class TitleSearchService {
             val url = "https://itunes.apple.com/search?term=$encodedQuery&entity=movie&limit=8"
             val request = Request.Builder()
                 .url(url)
-                .header("User-Agent", "SeraAkisos-App/2.0")
+                .header("User-Agent", "Vortex-App/2.0")
                 .build()
             val response = client.newCall(request).execute()
             if (!response.isSuccessful) return emptyList()
@@ -384,7 +384,7 @@ class TitleSearchService {
                     val url = "https://api.tvmaze.com/singlesearch/shows?q=$encoded&embed=episodes"
                     val request = Request.Builder()
                         .url(url)
-                        .header("User-Agent", "SeraAkisos-App/2.0")
+                        .header("User-Agent", "Vortex-App/2.0")
                         .build()
                     val response = client.newCall(request).execute()
                     if (response.isSuccessful) {
@@ -423,7 +423,7 @@ class TitleSearchService {
                     val url = "https://api.jikan.moe/v4/anime?q=$encoded&limit=3"
                     val request = Request.Builder()
                         .url(url)
-                        .header("User-Agent", "SeraAkisos-App/2.0")
+                        .header("User-Agent", "Vortex-App/2.0")
                         .build()
                     val response = client.newCall(request).execute()
                     if (response.isSuccessful) {

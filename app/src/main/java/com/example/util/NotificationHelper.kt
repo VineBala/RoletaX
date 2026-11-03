@@ -72,11 +72,11 @@ object NotificationHelper {
 
         val builder = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_popup_sync)
-            .setContentTitle("Sera Akisos: Atualização!")
+            .setContentTitle("Vortex: Atualização!")
             .setContentText("$titleName: $message")
             .setStyle(
                 NotificationCompat.BigTextStyle()
-                    .bigText("Novidades sobre '$titleName':\n$message\nAbra o Sera Akisos para acompanhar o novo episódio.")
+                    .bigText("Novidades sobre '$titleName':\n$message\nAbra o Vortex para acompanhar o novo episódio.")
             )
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setColor(0xFFB026FF.toInt())
@@ -94,7 +94,7 @@ object NotificationHelper {
     fun sendTestNotification(context: Context) {
         sendTitleUpdateNotification(
             context = context,
-            titleName = "Sera Akisos",
+            titleName = "Vortex",
             message = "Notificações ativas! Você será avisado assim que novos episódios ou temporadas forem encontrados.",
             notificationId = 1001
         )

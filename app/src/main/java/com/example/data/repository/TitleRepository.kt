@@ -234,8 +234,8 @@ class TitleRepository(
             array.put(obj)
         }
         val root = JSONObject()
-        root.put("app", "Sera Akisos")
-        root.put("version", "1.0")
+        root.put("app", "Vortex")
+        root.put("version", "2.0")
         root.put("exportedAt", System.currentTimeMillis())
         root.put("titles", array)
         return root.toString(2)

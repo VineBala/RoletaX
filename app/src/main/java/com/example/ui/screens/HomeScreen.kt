@@ -129,15 +129,24 @@ fun HomeScreen(
                     Spacer(modifier = Modifier.width(12.dp))
 
                     Column {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = "VORTEX",
+                                color = TextPrimary,
+                                fontSize = 22.sp,
+                                fontWeight = FontWeight.Black,
+                                letterSpacing = 1.5.sp
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "v2.0",
+                                color = NeonPurple,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
                         Text(
-                            text = "SERA AKISOS",
-                            color = TextPrimary,
-                            fontSize = 22.sp,
-                            fontWeight = FontWeight.Black,
-                            letterSpacing = 1.5.sp
-                        )
-                        Text(
-                            text = "Biblioteca & Roleta Inteligente",
+                            text = "Vortex • Por VineBalla",
                             color = NeonCyan,
                             fontSize = 11.sp,
                             fontWeight = FontWeight.SemiBold

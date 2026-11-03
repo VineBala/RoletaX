@@ -356,8 +356,8 @@ fun SettingsScreen(
                 Column {
                     SettingsActionItem(
                         icon = Icons.Default.Info,
-                        title = "Sobre o Sera Akisos",
-                        subtitle = "Versão 2.0 (Vortex Edition) • Por VineBalla",
+                        title = "Sobre o Vortex",
+                        subtitle = "Versão 2.0 • Por VineBalla",
                         iconTint = NeonCyan,
                         onClick = { showAboutDialog = true }
                     )
@@ -435,7 +435,7 @@ fun SettingsScreen(
                 Button(
                     onClick = {
                         val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                        val clip = ClipData.newPlainText("Sera Akisos Backup", exportedJsonText)
+                        val clip = ClipData.newPlainText("Vortex Backup", exportedJsonText)
                         clipboard.setPrimaryClip(clip)
                         viewModel.showMessage("Backup copiado para a área de transferência!")
                         showExportDialog = false
@@ -515,7 +515,7 @@ fun SettingsScreen(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(imageVector = Icons.Default.Casino, contentDescription = null, tint = NeonCyan, modifier = Modifier.size(24.dp))
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("SERA AKISOS", color = TextPrimary, fontWeight = FontWeight.Black)
+                    Text("VORTEX", color = TextPrimary, fontWeight = FontWeight.Black)
                 }
             },
             text = {
@@ -530,7 +530,7 @@ fun SettingsScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "Versão 2.0 (Vortex Edition)",
+                            text = "Versão 2.0",
                             color = NeonCyan,
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold
@@ -544,7 +544,7 @@ fun SettingsScreen(
                     }
 
                     Text(
-                        text = "Sera Akisos é uma biblioteca inteligente de entretenimento projetada para amantes de filmes, séries e animes.",
+                        text = "Vortex é uma biblioteca inteligente de entretenimento projetada para amantes de filmes, séries e animes.",
                         color = TextPrimary,
                         fontSize = 13.sp
                     )

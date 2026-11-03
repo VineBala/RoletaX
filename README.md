@@ -1,22 +1,31 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://ai.google.dev/static/site-assets/images/share-ais-513315318.png" />
-</div>
+# Vortex v2.0
+> **Biblioteca Inteligente de Entretenimento & Roleta Aleatória**
+> **Desenvolvido e Assinado por VineBalla**
 
-# Run and deploy your AI Studio app
+---
 
-This contains everything you need to run your app locally.
+## 🌪️ O que é o Vortex?
+O **Vortex** é um aplicativo Android nativo completo para gerenciar e catalogar filmes, séries e animes com visual futurista neon, controle de progresso detalhado e um sistema integrado de roleta aleatória sem repetições viciadas.
 
-View your app in AI Studio: https://ai.studio/apps/5042df6c-7b19-4d71-9a74-cbaea96a8b13
+---
 
-## Run Locally
+## 🚀 Novidades da Atualização v2.0
+1. **Preenchimento Automático de Episódios e Temporadas:**
+   - Busca em fontes oficiais (TVMaze e Jikan/MyAnimeList).
+   - Preenchimento exato do total de episódios e temporadas sem alterar o episódio atual (iniciado em 1).
+2. **Atualização em Massa de Títulos:**
+   - Botão para verificar na internet se há novos episódios ou temporadas de todos os títulos salvos na biblioteca.
+3. **Sistema de Notificações Nativas:**
+   - Alertas automáticos ao encontrar novas temporadas e episódios de títulos em andamento.
+4. **Sem Conflito de Instalação:**
+   - Pacote e assinatura calibrados para permitir atualizações diretas no Android sem necessidade de desinstalar a versão anterior.
+5. **Assinatura Oficial:**
+   - Registrado e assinado por **VineBalla**.
 
-**Prerequisites:**  [Android Studio](https://developer.android.com/studio)
+---
 
-
-1. Open Android Studio
-2. Select **Open** and choose the directory containing this project
-3. Allow Android Studio to fix any incompatibilities as it imports the project.
-4. Create a file named `.env` in the project directory and set `GEMINI_API_KEY` in that file to your Gemini API key (see `.env.example` for an example)
-5. Remove this line from the app's `build.gradle.kts` file: `signingConfig = signingConfigs.getByName("debugConfig")`
-6. Run the app on an emulator or physical device
-7. If you have already published your app in AI Studio, please [request upload key reset](https://support.google.com/googleplay/android-developer/answer/9842756#zippy=%2Crequest-an-upload-key-reset) in Google Play Console.
+## 🛠️ Tecnologias
+- **Kotlin & Jetpack Compose (Material 3)**
+- **Room Database** (armazenamento local offline-first)
+- **OkHttp & Kotlinx Coroutines**
+- **NotificationManagerCompat**

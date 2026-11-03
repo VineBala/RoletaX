@@ -22,6 +22,6 @@ dependencyResolutionManagement {
   }
 }
 
-rootProject.name = "Sera Akisos"
+rootProject.name = "Vortex"
 
 include(":app")
