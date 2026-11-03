@@ -1,6 +1,7 @@
 package com.example.data.remote
 
 import com.example.data.model.Category
+import com.example.data.model.TitleEntity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.withContext
@@ -58,7 +59,7 @@ class TitleSearchService {
             val url = "https://api.jikan.moe/v4/anime?q=$encodedQuery&limit=8"
             val request = Request.Builder()
                 .url(url)
-                .header("User-Agent", "SeraAkisos-App/1.0")
+                .header("User-Agent", "SeraAkisos-App/2.0")
                 .build()
             val response = client.newCall(request).execute()
             if (!response.isSuccessful) return emptyList()
@@ -70,10 +71,16 @@ class TitleSearchService {
             val results = mutableListOf<TitleSearchResult>()
             for (i in 0 until dataArray.length()) {
                 val item = dataArray.getJSONObject(i)
+                val malId = item.optInt("mal_id")
                 val title = item.optString("title", "Sem título")
                 val synopsis = item.optString("synopsis", "").trim()
-                val episodes = item.optInt("episodes", 12).coerceAtLeast(1)
+                var episodes = item.optInt("episodes", 0)
                 val year = item.optInt("year", 0).let { if (it > 0) it else 2023 }
+                
+                // If episodes is 0 or null, check if ongoing and try to fetch latest episode number
+                if (episodes <= 0) {
+                    episodes = fetchAnimeEpisodesCount(malId, title)
+                }
                 
                 // Get genres
                 val genresArray = item.optJSONArray("genres")
@@ -90,6 +97,8 @@ class TitleSearchService {
                 val coverUrl = images?.optString("large_image_url") 
                     ?: images?.optString("image_url") ?: ""
 
+                val safeEpisodes = if (episodes > 0) episodes else 12
+
                 results.add(
                     TitleSearchResult(
                         title = title,
@@ -99,9 +108,11 @@ class TitleSearchService {
                         releaseYear = year,
                         genre = genreStr,
                         totalSeasons = 1,
-                        episodesPerSeason = episodes,
-                        totalEpisodes = episodes,
-                        source = "MyAnimeList (Jikan)"
+                        episodesPerSeason = safeEpisodes,
+                        totalEpisodes = safeEpisodes,
+                        source = "MyAnimeList (Jikan)",
+                        externalId = malId.toString(),
+                        seasonBreakdown = "1 temporada • $safeEpisodes episódios"
                     )
                 )
             }
@@ -111,12 +122,48 @@ class TitleSearchService {
         }
     }
 
+    private fun fetchAnimeEpisodesCount(malId: Int, title: String): Int {
+        if (malId <= 0) return 12
+        // Specific quick fallback for legendary long-running titles
+        if (title.contains("One Piece", ignoreCase = true)) return 1150
+        if (title.contains("Detective Conan", ignoreCase = true)) return 1140
+        if (title.contains("Naruto Shippuuden", ignoreCase = true)) return 500
+        if (title.contains("Bleach", ignoreCase = true)) return 366
+
+        return try {
+            val url = "https://api.jikan.moe/v4/anime/$malId/episodes?limit=1"
+            val request = Request.Builder()
+                .url(url)
+                .header("User-Agent", "SeraAkisos-App/2.0")
+                .build()
+            val response = client.newCall(request).execute()
+            if (response.isSuccessful) {
+                val body = response.body?.string()
+                if (body != null) {
+                    val json = JSONObject(body)
+                    val pagination = json.optJSONObject("pagination")
+                    val itemsObj = pagination?.optJSONObject("items")
+                    val total = itemsObj?.optInt("total", 0) ?: 0
+                    if (total > 0) return total
+
+                    val lastPage = pagination?.optInt("last_visible_page", 0) ?: 0
+                    if (lastPage > 0) {
+                        return lastPage * 100
+                    }
+                }
+            }
+            12
+        } catch (_: Exception) {
+            12
+        }
+    }
+
     private fun searchSeries(encodedQuery: String): List<TitleSearchResult> {
         return try {
             val url = "https://api.tvmaze.com/search/shows?q=$encodedQuery"
             val request = Request.Builder()
                 .url(url)
-                .header("User-Agent", "SeraAkisos-App/1.0")
+                .header("User-Agent", "SeraAkisos-App/2.0")
                 .build()
             val response = client.newCall(request).execute()
             if (!response.isSuccessful) return emptyList()
@@ -129,6 +176,7 @@ class TitleSearchService {
             for (i in 0 until maxItems) {
                 val obj = array.getJSONObject(i)
                 val show = obj.optJSONObject("show") ?: continue
+                val showId = show.optInt("id", 0)
                 val name = show.optString("name", "Sem título")
                 val rawSummary = show.optString("summary", "")
                 val cleanSummary = rawSummary.replace(Regex("<.*?>"), "").trim()
@@ -151,6 +199,9 @@ class TitleSearchService {
                 val coverUrl = imageObj?.optString("original") 
                     ?: imageObj?.optString("medium") ?: ""
 
+                // Fetch real seasons and episodes breakdown from TVMaze
+                val (seasonsCount, totalEpisodes, epPerSeason, breakdown) = fetchSeriesSeasonsDetails(showId, name)
+
                 results.add(
                     TitleSearchResult(
                         title = name,
@@ -159,10 +210,12 @@ class TitleSearchService {
                         category = Category.SERIE,
                         releaseYear = year,
                         genre = genreStr,
-                        totalSeasons = 1,
-                        episodesPerSeason = 10,
-                        totalEpisodes = 10,
-                        source = "TVMaze"
+                        totalSeasons = seasonsCount,
+                        episodesPerSeason = epPerSeason,
+                        totalEpisodes = totalEpisodes,
+                        source = "TVMaze",
+                        externalId = showId.toString(),
+                        seasonBreakdown = breakdown
                     )
                 )
             }
@@ -172,12 +225,103 @@ class TitleSearchService {
         }
     }
 
+    private data class SeriesDetails(
+        val seasonsCount: Int,
+        val totalEpisodes: Int,
+        val episodesPerSeason: Int,
+        val breakdown: String
+    )
+
+    private fun fetchSeriesSeasonsDetails(showId: Int, showName: String): SeriesDetails {
+        if (showId <= 0) {
+            return SeriesDetails(1, 10, 10, "1 temporada • 10 episódios")
+        }
+
+        try {
+            // Fetch seasons info: https://api.tvmaze.com/shows/{id}/seasons
+            val seasonsUrl = "https://api.tvmaze.com/shows/$showId/seasons"
+            val seasonsReq = Request.Builder()
+                .url(seasonsUrl)
+                .header("User-Agent", "SeraAkisos-App/2.0")
+                .build()
+            val seasonsResp = client.newCall(seasonsReq).execute()
+            if (seasonsResp.isSuccessful) {
+                val seasonsBody = seasonsResp.body?.string()
+                if (seasonsBody != null) {
+                    val seasonsArr = JSONArray(seasonsBody)
+                    val seasonsCount = seasonsArr.length().coerceAtLeast(1)
+                    var totalEps = 0
+                    var firstSeasonEps = 0
+                    val breakdownList = mutableListOf<String>()
+
+                    for (s in 0 until seasonsArr.length()) {
+                        val seasonObj = seasonsArr.getJSONObject(s)
+                        val seasonNum = seasonObj.optInt("number", s + 1)
+                        val epOrder = seasonObj.optInt("episodeOrder", 0)
+                        if (epOrder > 0) {
+                            totalEps += epOrder
+                            if (s == 0) firstSeasonEps = epOrder
+                            breakdownList.add("T$seasonNum: $epOrder eps")
+                        }
+                    }
+
+                    if (totalEps > 0) {
+                        val breakdownStr = "$seasonsCount temp${if (seasonsCount > 1) "s" else ""} • " +
+                                (if (breakdownList.isNotEmpty()) breakdownList.take(3).joinToString(", ") else "$totalEps episódios")
+                        return SeriesDetails(
+                            seasonsCount = seasonsCount,
+                            totalEpisodes = totalEps,
+                            episodesPerSeason = if (firstSeasonEps > 0) firstSeasonEps else (totalEps / seasonsCount).coerceAtLeast(1),
+                            breakdown = breakdownStr
+                        )
+                    }
+                }
+            }
+
+            // Fallback: fetch episodes array: https://api.tvmaze.com/shows/{id}/episodes
+            val episodesUrl = "https://api.tvmaze.com/shows/$showId/episodes"
+            val episodesReq = Request.Builder()
+                .url(episodesUrl)
+                .header("User-Agent", "SeraAkisos-App/2.0")
+                .build()
+            val episodesResp = client.newCall(episodesReq).execute()
+            if (episodesResp.isSuccessful) {
+                val episodesBody = episodesResp.body?.string()
+                if (episodesBody != null) {
+                    val epArr = JSONArray(episodesBody)
+                    val totalEps = epArr.length()
+                    var maxSeason = 1
+                    var s1Count = 0
+                    for (i in 0 until epArr.length()) {
+                        val epObj = epArr.getJSONObject(i)
+                        val season = epObj.optInt("season", 1)
+                        if (season > maxSeason) maxSeason = season
+                        if (season == 1) s1Count++
+                    }
+
+                    if (totalEps > 0) {
+                        return SeriesDetails(
+                            seasonsCount = maxSeason,
+                            totalEpisodes = totalEps,
+                            episodesPerSeason = if (s1Count > 0) s1Count else (totalEps / maxSeason).coerceAtLeast(1),
+                            breakdown = "$maxSeason temporada(s) • $totalEps episódios no total"
+                        )
+                    }
+                }
+            }
+        } catch (_: Exception) {
+            // Handled safely
+        }
+
+        return SeriesDetails(1, 10, 10, "1 temporada • 10 episódios")
+    }
+
     private fun searchMovies(encodedQuery: String): List<TitleSearchResult> {
         return try {
             val url = "https://itunes.apple.com/search?term=$encodedQuery&entity=movie&limit=8"
             val request = Request.Builder()
                 .url(url)
-                .header("User-Agent", "SeraAkisos-App/1.0")
+                .header("User-Agent", "SeraAkisos-App/2.0")
                 .build()
             val response = client.newCall(request).execute()
             if (!response.isSuccessful) return emptyList()
@@ -214,7 +358,9 @@ class TitleSearchService {
                         totalSeasons = 1,
                         episodesPerSeason = 1,
                         totalEpisodes = 1,
-                        source = "iTunes Movie DB"
+                        source = "iTunes Movie DB",
+                        externalId = item.optLong("trackId", 0L).toString(),
+                        seasonBreakdown = "Filme completo"
                     )
                 )
             }
@@ -224,7 +370,7 @@ class TitleSearchService {
         }
     }
 
-    suspend fun checkTitleForUpdates(title: com.example.data.model.TitleEntity): TitleUpdateInfo = withContext(Dispatchers.IO) {
+    suspend fun checkTitleForUpdates(title: TitleEntity): TitleUpdateInfo = withContext(Dispatchers.IO) {
         val trimmed = title.name.trim()
         val encoded = try {
             URLEncoder.encode(trimmed, "UTF-8")
@@ -238,7 +384,7 @@ class TitleSearchService {
                     val url = "https://api.tvmaze.com/singlesearch/shows?q=$encoded&embed=episodes"
                     val request = Request.Builder()
                         .url(url)
-                        .header("User-Agent", "SeraAkisos-App/1.0")
+                        .header("User-Agent", "SeraAkisos-App/2.0")
                         .build()
                     val response = client.newCall(request).execute()
                     if (response.isSuccessful) {
@@ -261,14 +407,14 @@ class TitleSearchService {
                                         newTotalEpisodes = maxOf(totalRemoteEpisodes, title.totalEpisodes),
                                         newTotalSeasons = maxOf(maxSeason, title.totalSeasons),
                                         hasUpdates = true,
-                                        description = "Nova temporada/episódio encontrado no catálogo oficial ($totalRemoteEpisodes episódios, $maxSeason temporadas)."
+                                        description = "Novos episódios/temporadas encontrados ($totalRemoteEpisodes episódios, $maxSeason temporadas)."
                                     )
                                 }
                             }
                         }
                     }
                 } catch (_: Exception) {
-                    // Fallback to standard check
+                    // Handled safely
                 }
             }
 
@@ -277,7 +423,7 @@ class TitleSearchService {
                     val url = "https://api.jikan.moe/v4/anime?q=$encoded&limit=3"
                     val request = Request.Builder()
                         .url(url)
-                        .header("User-Agent", "SeraAkisos-App/1.0")
+                        .header("User-Agent", "SeraAkisos-App/2.0")
                         .build()
                     val response = client.newCall(request).execute()
                     if (response.isSuccessful) {
@@ -305,11 +451,10 @@ class TitleSearchService {
             }
 
             Category.FILME -> {
-                // Movies don't have new episodes, but we can verify if sequel or extended data exists
+                // Movies
             }
         }
 
-        // Default: no new updates found
         TitleUpdateInfo(
             newTotalEpisodes = title.totalEpisodes,
             newTotalSeasons = title.totalSeasons,
@@ -325,4 +470,3 @@ data class TitleUpdateInfo(
     val hasUpdates: Boolean,
     val description: String
 )
-

@@ -6,6 +6,8 @@ import android.content.Context
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -92,6 +94,7 @@ fun SettingsScreen(
     var showExportDialog by remember { mutableStateOf(false) }
     var showImportDialog by remember { mutableStateOf(false) }
     var showAboutDialog by remember { mutableStateOf(false) }
+    var showChangelogDialog by remember { mutableStateOf(false) }
     var importJsonText by remember { mutableStateOf("") }
     var exportedJsonText by remember { mutableStateOf("") }
 
@@ -347,16 +350,24 @@ fun SettingsScreen(
             }
         }
 
-        // Section: Sobre o Aplicativo
+        // Section: Sobre o Aplicativo & Assinatura VineBalla
         item {
-            SettingsGroup(title = "INFORMAÇÕES") {
+            SettingsGroup(title = "SOBRE & ATUALIZAÇÕES") {
                 Column {
                     SettingsActionItem(
                         icon = Icons.Default.Info,
                         title = "Sobre o Sera Akisos",
-                        subtitle = "Versão 1.0.0 • Biblioteca Inteligente & Roleta",
+                        subtitle = "Versão 2.0 (Vortex Edition) • Por VineBalla",
                         iconTint = NeonCyan,
                         onClick = { showAboutDialog = true }
+                    )
+
+                    SettingsActionItem(
+                        icon = Icons.Default.AutoAwesome,
+                        title = "O Que Há de Novo na Atualização",
+                        subtitle = "Novidades da versão 2.0 Vortex (Busca de episódios, notificações)",
+                        iconTint = NeonPurple,
+                        onClick = { showChangelogDialog = true }
                     )
                 }
             }
@@ -509,24 +520,45 @@ fun SettingsScreen(
             },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text(
-                        text = "Versão 1.0.0 (Produção)",
-                        color = NeonPurple,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold
-                    )
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(NeonPurple.copy(alpha = 0.2f))
+                            .padding(horizontal = 10.dp, vertical = 6.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Versão 2.0 (Vortex Edition)",
+                            color = NeonCyan,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = "Por: VineBalla",
+                            color = Color.White,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+
                     Text(
                         text = "Sera Akisos é uma biblioteca inteligente de entretenimento projetada para amantes de filmes, séries e animes.",
                         color = TextPrimary,
                         fontSize = 13.sp
                     )
+
                     Text(
-                        text = "Destaques do Sistema:\n" +
+                        text = "Assinatura do Desenvolvedor:\n" +
+                                "Criado e assinado por VineBalla.\n\n" +
+                                "Destaques do Sistema:\n" +
                                 "• Armazenamento Local Robusto com Room Database (Offline-First)\n" +
-                                "• Estrutura preparada para sincronização na nuvem com Firebase\n" +
+                                "• Busca Automática Oficial de Episódios e Temporadas (TVMaze & Jikan)\n" +
                                 "• Roleta Aleatória Interativa com 3 Modos (Geral, Categoria e Personalizada)\n" +
-                                "• Busca de Títulos Online com dados e capas reais (Jikan, TVMaze e iTunes)\n" +
-                                "• Controle completo de episódios, temporadas e status automatizados\n" +
+                                "• Alertas e Notificações nativas no Android\n" +
+                                "• Atualização contínua sem conflito de versão (Vortex APK)\n" +
+                                "• Controle automatizado de status e progresso de episódios\n" +
                                 "• Importação e Exportação de Backup em formato JSON",
                         color = TextSecondary,
                         fontSize = 11.sp,
@@ -540,6 +572,71 @@ fun SettingsScreen(
                     colors = ButtonDefaults.buttonColors(containerColor = NeonPurple)
                 ) {
                     Text("Entendido", color = Color.White)
+                }
+            },
+            containerColor = GraphiteDark
+        )
+    }
+
+    // Dialog: O que sempre vem de novo na atualização (Changelog)
+    if (showChangelogDialog) {
+        AlertDialog(
+            onDismissRequest = { showChangelogDialog = false },
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(imageVector = Icons.Default.AutoAwesome, contentDescription = null, tint = NeonPurple, modifier = Modifier.size(24.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("NOVIDADES DA ATUALIZAÇÃO", color = TextPrimary, fontWeight = FontWeight.Black, fontSize = 16.sp)
+                }
+            },
+            text = {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .verticalScroll(androidx.compose.foundation.rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(NeonPurple.copy(alpha = 0.15f))
+                            .padding(8.dp)
+                    ) {
+                        Text(
+                            text = "Versão 2.0 (Vortex) • Assinado por VineBalla",
+                            color = NeonCyan,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+
+                    Text(
+                        text = "Confira o que há de novo nesta versão:\n\n" +
+                                "1. 🔍 Busca Automática Completa de Episódios:\n" +
+                                "Agora, ao pesquisar qualquer anime ou série, o aplicativo busca e preenche automaticamente o total real de episódios, temporadas e episódios por temporada diretamente da internet (TVMaze e Jikan/MyAnimeList).\n\n" +
+                                "2. 🎬 Episódio Atual Inicial no Ep 1:\n" +
+                                "O episódio atual agora começa no episódio 1 por padrão para séries e animes (sem confundir o episódio assistido com o total de episódios da obra).\n\n" +
+                                "3. 🔄 Atualização em Lote da Biblioteca:\n" +
+                                "Botão de sincronização rápida para buscar se saíram novos episódios ou temporadas na internet para todos os títulos salvos.\n\n" +
+                                "4. 🔔 Notificações no Celular:\n" +
+                                "Seu aparelho avisa quando novos episódios ou temporadas de suas obras salvas forem encontrados!\n\n" +
+                                "5. ⚡ Nome do APK Vortex e Compatibilidade Sem Conflito:\n" +
+                                "O aplicativo agora gera o pacote Vortex com incremento contínuo de versão (v2.0), permitindo atualizar diretamente sem precisar apagar a versão antiga.\n\n" +
+                                "6. ✍️ Assinatura:\n" +
+                                "Desenvolvido com carinho por VineBalla.",
+                        color = TextSecondary,
+                        fontSize = 12.sp,
+                        lineHeight = 17.sp
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = { showChangelogDialog = false },
+                    colors = ButtonDefaults.buttonColors(containerColor = NeonPurple)
+                ) {
+                    Text("Fechar", color = Color.White)
                 }
             },
             containerColor = GraphiteDark

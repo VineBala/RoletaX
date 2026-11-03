@@ -202,6 +202,7 @@ class SeraAkisosViewModel(application: Application) : AndroidViewModel(applicati
     fun startNewTitleForm(prefillCategory: Category = Category.FILME) {
         _formState.value = TitleFormState(
             category = prefillCategory,
+            currentEpisode = if (prefillCategory == Category.FILME) 0 else 1,
             isEditing = false
         )
     }
@@ -236,14 +237,14 @@ class SeraAkisosViewModel(application: Application) : AndroidViewModel(applicati
             category = result.category,
             releaseYear = result.releaseYear,
             genre = result.genre,
-            totalSeasons = result.totalSeasons,
-            episodesPerSeason = result.episodesPerSeason,
+            totalSeasons = result.totalSeasons.coerceAtLeast(1),
+            episodesPerSeason = result.episodesPerSeason.coerceAtLeast(1),
             currentSeason = 1,
-            currentEpisode = 0,
-            totalEpisodes = result.totalEpisodes,
+            currentEpisode = if (result.category == Category.FILME) 0 else 1,
+            totalEpisodes = result.totalEpisodes.coerceAtLeast(1),
             status = WatchStatus.PENDENTE,
             personalRating = 0f,
-            notes = "Origem: ${result.source}",
+            notes = if (result.seasonBreakdown.isNotBlank()) "Origem: ${result.source} • ${result.seasonBreakdown}" else "Origem: ${result.source}",
             isEditing = false
         )
     }

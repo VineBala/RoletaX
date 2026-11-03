@@ -443,6 +443,28 @@ private fun SearchResultCard(
                     overflow = TextOverflow.Ellipsis
                 )
 
+                if (item.category != Category.FILME) {
+                    Spacer(modifier = Modifier.height(3.dp))
+                    Row(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(NeonCyan.copy(alpha = 0.12f))
+                            .border(0.5.dp, NeonCyan.copy(alpha = 0.35f), RoundedCornerShape(6.dp))
+                            .padding(horizontal = 6.dp, vertical = 2.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = if (item.seasonBreakdown.isNotBlank())
+                                item.seasonBreakdown
+                            else
+                                "${item.totalSeasons} temporada(s) • ${item.totalEpisodes} episódios totais",
+                            color = NeonCyan,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+
                 if (item.synopsis.isNotBlank()) {
                     Spacer(modifier = Modifier.height(2.dp))
                     Text(
