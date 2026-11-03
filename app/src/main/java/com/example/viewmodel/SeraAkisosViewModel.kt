@@ -6,9 +6,11 @@ import androidx.lifecycle.viewModelScope
 import com.example.data.local.AppDatabase
 import com.example.data.model.Category
 import com.example.data.model.TitleEntity
+import com.example.data.model.UpdateResult
 import com.example.data.model.WatchStatus
 import com.example.data.remote.TitleSearchResult
 import com.example.data.repository.TitleRepository
+import com.example.util.NotificationHelper
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -570,5 +572,125 @@ class SeraAkisosViewModel(application: Application) : AndroidViewModel(applicati
             repository.deleteAll()
             showMessage("Todos os dados da biblioteca foram limpos.")
         }
+    }
+
+    // ==========================================
+    // SYNC TITLES & NOTIFICATIONS
+    // ==========================================
+    private val _isSyncingTitles = MutableStateFlow(false)
+    val isSyncingTitles = _isSyncingTitles.asStateFlow()
+
+    private val _syncProgressText = MutableStateFlow("")
+    val syncProgressText = _syncProgressText.asStateFlow()
+
+    private val _syncResults = MutableStateFlow<List<UpdateResult>?>(null)
+    val syncResults = _syncResults.asStateFlow()
+
+    private val _notificationsEnabled = MutableStateFlow(true)
+    val notificationsEnabled = _notificationsEnabled.asStateFlow()
+
+    fun setNotificationsEnabled(enabled: Boolean) {
+        _notificationsEnabled.value = enabled
+    }
+
+    fun toggleNotificationsEnabled() {
+        _notificationsEnabled.value = !_notificationsEnabled.value
+    }
+
+    fun dismissSyncResults() {
+        _syncResults.value = null
+    }
+
+    fun syncAllTitles() {
+        if (_isSyncingTitles.value) return
+        viewModelScope.launch {
+            _isSyncingTitles.value = true
+            _syncProgressText.value = "Conectando às fontes oficiais..."
+            try {
+                val results = repository.checkForUpdates { current, total, titleName ->
+                    _syncProgressText.value = "Verificando $current/$total: $titleName..."
+                }
+                _syncResults.value = results
+
+                if (results.isNotEmpty()) {
+                    if (_notificationsEnabled.value) {
+                        results.forEach { item ->
+                            val msg = "Novos episódios disponíveis! Total atualizado: ${item.newEpisodes} episódios (${item.newSeasons} temporadas)."
+                            NotificationHelper.sendTitleUpdateNotification(
+                                context = getApplication(),
+                                titleName = item.titleName,
+                                message = msg,
+                                notificationId = item.titleId.toInt()
+                            )
+                        }
+                    }
+                    showMessage("${results.size} título(s) receberam atualizações de episódios/temporadas!")
+                } else {
+                    showMessage("Todos os títulos já estão na versão mais recente!")
+                }
+            } catch (e: Exception) {
+                showMessage("Erro ao buscar atualizações online. Verifique sua conexão.")
+            } finally {
+                _isSyncingTitles.value = false
+                _syncProgressText.value = ""
+            }
+        }
+    }
+
+    fun syncSingleTitle(title: TitleEntity) {
+        viewModelScope.launch {
+            _isSyncingTitles.value = true
+            _syncProgressText.value = "Verificando '${title.name}'..."
+            try {
+                val result = repository.checkSingleTitleUpdate(title.id)
+                if (result != null) {
+                    _syncResults.value = listOf(result)
+                    if (_notificationsEnabled.value) {
+                        NotificationHelper.sendTitleUpdateNotification(
+                            context = getApplication(),
+                            titleName = result.titleName,
+                            message = "Novos episódios encontrados! Agora são ${result.newEpisodes} episódios.",
+                            notificationId = result.titleId.toInt()
+                        )
+                    }
+                    showMessage("Novos episódios encontrados para '${title.name}'!")
+                } else {
+                    showMessage("'${title.name}' já está na versão mais recente.")
+                }
+            } catch (e: Exception) {
+                showMessage("Erro ao verificar atualização para '${title.name}'.")
+            } finally {
+                _isSyncingTitles.value = false
+            }
+        }
+    }
+
+    fun simulateUpdateForTesting() {
+        viewModelScope.launch {
+            val list = allTitles.value.filter { !it.isMovie }
+            if (list.isEmpty()) {
+                showMessage("Adicione ao menos uma série ou anime para testar a notificação!")
+                return@launch
+            }
+            val target = list.first()
+            val result = repository.simulateTitleUpdate(target.id, addEpisodes = 1)
+            if (result != null) {
+                _syncResults.value = listOf(result)
+                if (_notificationsEnabled.value) {
+                    NotificationHelper.sendTitleUpdateNotification(
+                        context = getApplication(),
+                        titleName = result.titleName,
+                        message = "NOVO EPISÓDIO DISPONÍVEL! Total: ${result.newEpisodes} episódios.",
+                        notificationId = result.titleId.toInt()
+                    )
+                }
+                showMessage("Atualização simulada e notificação enviada para '${result.titleName}'!")
+            }
+        }
+    }
+
+    fun sendTestNotification() {
+        NotificationHelper.sendTestNotification(getApplication())
+        showMessage("Notificação de teste disparada!")
     }
 }

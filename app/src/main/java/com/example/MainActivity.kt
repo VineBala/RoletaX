@@ -1,10 +1,13 @@
 package com.example
 
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -23,6 +26,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.ui.components.SeraBottomNav
+import com.example.ui.components.SyncResultsDialog
 import com.example.ui.screens.AddEditTitleScreen
 import com.example.ui.screens.HomeScreen
 import com.example.ui.screens.LibraryScreen
@@ -30,6 +34,7 @@ import com.example.ui.screens.RouletteScreen
 import com.example.ui.screens.SettingsScreen
 import com.example.ui.screens.TitleDetailDialog
 import com.example.ui.theme.SeraAkisosTheme
+import com.example.util.NotificationHelper
 import com.example.viewmodel.NavDestination
 import com.example.viewmodel.SeraAkisosViewModel
 
@@ -39,6 +44,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        NotificationHelper.createNotificationChannel(this)
         enableEdgeToEdge()
         setContent {
             val isDarkTheme by viewModel.isDarkTheme.collectAsStateWithLifecycle()
@@ -54,7 +60,21 @@ class MainActivity : ComponentActivity() {
 fun SeraAkisosApp(viewModel: SeraAkisosViewModel) {
     val currentNav by viewModel.currentNav.collectAsStateWithLifecycle()
     val selectedTitle by viewModel.selectedTitle.collectAsStateWithLifecycle()
+    val syncResults by viewModel.syncResults.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
+
+    // Request notification permission on Android 13+
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        viewModel.setNotificationsEnabled(isGranted)
+    }
+
+    LaunchedEffect(Unit) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            notificationPermissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
 
     // Collect snackbar messages
     LaunchedEffect(viewModel) {
@@ -64,8 +84,10 @@ fun SeraAkisosApp(viewModel: SeraAkisosViewModel) {
     }
 
     // Android System Back Handling
-    BackHandler(enabled = selectedTitle != null || currentNav != NavDestination.HOME) {
-        if (selectedTitle != null) {
+    BackHandler(enabled = syncResults != null || selectedTitle != null || currentNav != NavDestination.HOME) {
+        if (syncResults != null) {
+            viewModel.dismissSyncResults()
+        } else if (selectedTitle != null) {
             viewModel.closeTitleDetails()
         } else if (currentNav != NavDestination.HOME) {
             viewModel.navigateTo(NavDestination.HOME)
@@ -120,7 +142,18 @@ fun SeraAkisosApp(viewModel: SeraAkisosViewModel) {
             },
             onDelete = {
                 viewModel.deleteTitle(title)
+            },
+            onCheckUpdates = {
+                viewModel.syncSingleTitle(title)
             }
+        )
+    }
+
+    // Sync Results Dialog
+    syncResults?.let { results ->
+        SyncResultsDialog(
+            results = results,
+            onDismiss = { viewModel.dismissSyncResults() }
         )
     }
 }

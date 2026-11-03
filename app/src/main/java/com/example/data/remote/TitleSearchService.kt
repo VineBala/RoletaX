@@ -223,4 +223,106 @@ class TitleSearchService {
             emptyList()
         }
     }
+
+    suspend fun checkTitleForUpdates(title: com.example.data.model.TitleEntity): TitleUpdateInfo = withContext(Dispatchers.IO) {
+        val trimmed = title.name.trim()
+        val encoded = try {
+            URLEncoder.encode(trimmed, "UTF-8")
+        } catch (_: Exception) {
+            trimmed
+        }
+
+        when (title.categoryEnum) {
+            Category.SERIE -> {
+                try {
+                    val url = "https://api.tvmaze.com/singlesearch/shows?q=$encoded&embed=episodes"
+                    val request = Request.Builder()
+                        .url(url)
+                        .header("User-Agent", "SeraAkisos-App/1.0")
+                        .build()
+                    val response = client.newCall(request).execute()
+                    if (response.isSuccessful) {
+                        val body = response.body?.string()
+                        if (body != null) {
+                            val json = JSONObject(body)
+                            val embedded = json.optJSONObject("_embedded")
+                            val episodesArray = embedded?.optJSONArray("episodes")
+                            if (episodesArray != null && episodesArray.length() > 0) {
+                                val totalRemoteEpisodes = episodesArray.length()
+                                var maxSeason = 1
+                                for (i in 0 until episodesArray.length()) {
+                                    val epObj = episodesArray.getJSONObject(i)
+                                    val s = epObj.optInt("season", 1)
+                                    if (s > maxSeason) maxSeason = s
+                                }
+
+                                if (totalRemoteEpisodes > title.totalEpisodes || maxSeason > title.totalSeasons) {
+                                    return@withContext TitleUpdateInfo(
+                                        newTotalEpisodes = maxOf(totalRemoteEpisodes, title.totalEpisodes),
+                                        newTotalSeasons = maxOf(maxSeason, title.totalSeasons),
+                                        hasUpdates = true,
+                                        description = "Nova temporada/episódio encontrado no catálogo oficial ($totalRemoteEpisodes episódios, $maxSeason temporadas)."
+                                    )
+                                }
+                            }
+                        }
+                    }
+                } catch (_: Exception) {
+                    // Fallback to standard check
+                }
+            }
+
+            Category.ANIME -> {
+                try {
+                    val url = "https://api.jikan.moe/v4/anime?q=$encoded&limit=3"
+                    val request = Request.Builder()
+                        .url(url)
+                        .header("User-Agent", "SeraAkisos-App/1.0")
+                        .build()
+                    val response = client.newCall(request).execute()
+                    if (response.isSuccessful) {
+                        val body = response.body?.string()
+                        if (body != null) {
+                            val json = JSONObject(body)
+                            val data = json.optJSONArray("data")
+                            if (data != null && data.length() > 0) {
+                                val item = data.getJSONObject(0)
+                                val episodes = item.optInt("episodes", 0)
+                                if (episodes > title.totalEpisodes) {
+                                    return@withContext TitleUpdateInfo(
+                                        newTotalEpisodes = episodes,
+                                        newTotalSeasons = title.totalSeasons,
+                                        hasUpdates = true,
+                                        description = "Novos episódios oficiais adicionados ($episodes episódios disponíveis)."
+                                    )
+                                }
+                            }
+                        }
+                    }
+                } catch (_: Exception) {
+                    // Handled safely
+                }
+            }
+
+            Category.FILME -> {
+                // Movies don't have new episodes, but we can verify if sequel or extended data exists
+            }
+        }
+
+        // Default: no new updates found
+        TitleUpdateInfo(
+            newTotalEpisodes = title.totalEpisodes,
+            newTotalSeasons = title.totalSeasons,
+            hasUpdates = false,
+            description = "Nenhuma nova temporada ou episódio disponível no momento."
+        )
+    }
 }
+
+data class TitleUpdateInfo(
+    val newTotalEpisodes: Int,
+    val newTotalSeasons: Int,
+    val hasUpdates: Boolean,
+    val description: String
+)
+

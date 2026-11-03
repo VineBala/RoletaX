@@ -22,6 +22,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Casino
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.DarkMode
@@ -29,7 +30,9 @@ import androidx.compose.material.icons.filled.DeleteForever
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.LightMode
+import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material.icons.filled.Restore
+import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material.icons.filled.Upload
@@ -83,6 +86,7 @@ fun SettingsScreen(
     val allTitles by viewModel.allTitles.collectAsStateWithLifecycle()
     val excludeCompleted by viewModel.rouletteExcludeCompleted.collectAsStateWithLifecycle()
     val avoidLastResult by viewModel.rouletteAvoidLastResult.collectAsStateWithLifecycle()
+    val notificationsEnabled by viewModel.notificationsEnabled.collectAsStateWithLifecycle()
 
     var showClearConfirm by remember { mutableStateOf(false) }
     var showExportDialog by remember { mutableStateOf(false) }
@@ -219,10 +223,89 @@ fun SettingsScreen(
             }
         }
 
+        // Section: Notificações
+        item {
+            SettingsGroup(title = "NOTIFICAÇÕES NO CELULAR") {
+                Column {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(14.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
+                            Box(
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .clip(CircleShape)
+                                    .background(NeonCyan.copy(alpha = 0.15f)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.NotificationsActive,
+                                    contentDescription = null,
+                                    tint = NeonCyan,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column {
+                                Text(
+                                    text = "Alertas de Novos Episódios",
+                                    color = TextPrimary,
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    text = "Notificar o celular quando houver novas temporadas ou episódios",
+                                    color = TextSecondary,
+                                    fontSize = 11.sp
+                                )
+                            }
+                        }
+
+                        Switch(
+                            checked = notificationsEnabled,
+                            onCheckedChange = { viewModel.setNotificationsEnabled(it) },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = NeonCyan,
+                                checkedTrackColor = NeonPurple
+                            )
+                        )
+                    }
+
+                    SettingsActionItem(
+                        icon = Icons.Default.NotificationsActive,
+                        title = "Testar Notificação Agora",
+                        subtitle = "Dispara uma notificação imediata para testar no aparelho",
+                        iconTint = NeonPurple,
+                        onClick = { viewModel.sendTestNotification() }
+                    )
+                }
+            }
+        }
+
         // Section: Gerenciamento da Biblioteca & Backup
         item {
-            SettingsGroup(title = "GERENCIAMENTO DA BIBLIOTECA & BACKUP") {
+            SettingsGroup(title = "GERENCIAMENTO DA BIBLIOTECA & ATUALIZAÇÕES") {
                 Column {
+                    SettingsActionItem(
+                        icon = Icons.Default.Sync,
+                        title = "Verificar Atualizações de Todos os Títulos",
+                        subtitle = "Procura na internet novos episódios e temporadas para os ${allTitles.size} títulos salvos",
+                        iconTint = NeonCyan,
+                        onClick = { viewModel.syncAllTitles() }
+                    )
+
+                    SettingsActionItem(
+                        icon = Icons.Default.AutoAwesome,
+                        title = "Simular Chegada de Novo Episódio (Teste)",
+                        subtitle = "Adiciona +1 episódio oficial e dispara a notificação no celular",
+                        iconTint = NeonPurple,
+                        onClick = { viewModel.simulateUpdateForTesting() }
+                    )
+
                     SettingsActionItem(
                         icon = Icons.Default.Restore,
                         title = "Carregar Dados de Exemplo",

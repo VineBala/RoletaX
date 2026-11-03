@@ -29,8 +29,10 @@ import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Sort
+import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -82,6 +84,9 @@ fun LibraryScreen(
     val selectedStatus by viewModel.selectedStatusFilter.collectAsStateWithLifecycle()
     val selectedSort by viewModel.selectedSort.collectAsStateWithLifecycle()
 
+    val isSyncingTitles by viewModel.isSyncingTitles.collectAsStateWithLifecycle()
+    val syncProgressText by viewModel.syncProgressText.collectAsStateWithLifecycle()
+
     var showSortMenu by remember { mutableStateOf(false) }
 
     Column(
@@ -91,7 +96,7 @@ fun LibraryScreen(
     ) {
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Title and Sort Header
+        // Title and Actions Header
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -112,30 +117,59 @@ fun LibraryScreen(
                 )
             }
 
-            Box {
-                Row(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(GraphiteSurface)
-                        .border(1.dp, GraphiteBorder, RoundedCornerShape(10.dp))
-                        .clickable { showSortMenu = true }
-                        .padding(horizontal = 10.dp, vertical = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                // Button to Update All Titles
+                Button(
+                    onClick = { viewModel.syncAllTitles() },
+                    enabled = !isSyncingTitles && allTitles.isNotEmpty(),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = NeonPurple,
+                        disabledContainerColor = GraphiteSurfaceVariant
+                    ),
+                    shape = RoundedCornerShape(10.dp),
+                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+                    modifier = Modifier.testTag("sync_all_titles_button")
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Sort,
-                        contentDescription = "Ordenar",
-                        tint = NeonCyan,
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
+                    if (isSyncingTitles) {
+                        CircularProgressIndicator(
+                            color = Color.White,
+                            modifier = Modifier.size(14.dp),
+                            strokeWidth = 2.dp
+                        )
+                    } else {
+                        Icon(
+                            imageVector = Icons.Default.Sync,
+                            contentDescription = "Atualizar Títulos",
+                            tint = Color.White,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(4.dp))
                     Text(
-                        text = selectedSort.label,
-                        color = TextPrimary,
+                        text = if (isSyncingTitles) "Buscando..." else "Atualizar",
+                        color = Color.White,
                         fontSize = 11.sp,
-                        fontWeight = FontWeight.Medium
+                        fontWeight = FontWeight.Bold
                     )
                 }
+
+                Box {
+                    Row(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(GraphiteSurface)
+                            .border(1.dp, GraphiteBorder, RoundedCornerShape(10.dp))
+                            .clickable { showSortMenu = true }
+                            .padding(horizontal = 8.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Sort,
+                            contentDescription = "Ordenar",
+                            tint = NeonCyan,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
 
                 DropdownMenu(
                     expanded = showSortMenu,
@@ -160,8 +194,35 @@ fun LibraryScreen(
                 }
             }
         }
+    }
 
-        Spacer(modifier = Modifier.height(12.dp))
+    Spacer(modifier = Modifier.height(12.dp))
+
+        if (isSyncingTitles) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(NeonPurple.copy(alpha = 0.15f))
+                    .border(1.dp, NeonPurple.copy(alpha = 0.4f), RoundedCornerShape(10.dp))
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                CircularProgressIndicator(
+                    color = NeonCyan,
+                    modifier = Modifier.size(16.dp),
+                    strokeWidth = 2.dp
+                )
+                Spacer(modifier = Modifier.width(10.dp))
+                Text(
+                    text = if (syncProgressText.isNotBlank()) syncProgressText else "Verificando novos episódios na internet...",
+                    color = NeonCyan,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Medium
+                )
+            }
+            Spacer(modifier = Modifier.height(10.dp))
+        }
 
         // Search Input Field
         OutlinedTextField(

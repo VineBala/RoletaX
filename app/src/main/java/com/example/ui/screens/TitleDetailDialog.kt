@@ -26,6 +26,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -76,7 +77,8 @@ fun TitleDetailDialog(
     onToggleMovieWatched: () -> Unit,
     onUpdateStatus: (WatchStatus) -> Unit,
     onEdit: () -> Unit,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    onCheckUpdates: () -> Unit = {}
 ) {
     var showDeleteConfirm by remember { mutableStateOf(false) }
 
@@ -119,6 +121,15 @@ fun TitleDetailDialog(
                         }
 
                         Row(verticalAlignment = Alignment.CenterVertically) {
+                            if (!title.isMovie) {
+                                IconButton(onClick = onCheckUpdates) {
+                                    Icon(
+                                        imageVector = Icons.Default.Sync,
+                                        contentDescription = "Buscar Atualizações Online",
+                                        tint = NeonCyan
+                                    )
+                                }
+                            }
                             IconButton(onClick = onEdit) {
                                 Icon(
                                     imageVector = Icons.Default.Edit,

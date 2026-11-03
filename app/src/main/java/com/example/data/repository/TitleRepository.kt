@@ -274,4 +274,88 @@ class TitleRepository(
         }
         imported.size
     }
+
+    suspend fun checkForUpdates(
+        onProgress: (current: Int, total: Int, titleName: String) -> Unit
+    ): List<com.example.data.model.UpdateResult> = withContext(Dispatchers.IO) {
+        val titles = titleDao.getAllTitles().first()
+        val updateResults = mutableListOf<com.example.data.model.UpdateResult>()
+
+        val eligibleForUpdate = titles.filter { !it.isMovie }
+        val totalCount = eligibleForUpdate.size
+
+        eligibleForUpdate.forEachIndexed { index, title ->
+            onProgress(index + 1, totalCount, title.name)
+            val info = searchService.checkTitleForUpdates(title)
+            if (info.hasUpdates) {
+                val updated = title.copy(
+                    totalEpisodes = info.newTotalEpisodes,
+                    totalSeasons = info.newTotalSeasons,
+                    updatedAt = System.currentTimeMillis()
+                )
+                titleDao.update(applyStatusAutomation(updated))
+                updateResults.add(
+                    com.example.data.model.UpdateResult(
+                        titleId = title.id,
+                        titleName = title.name,
+                        category = title.categoryEnum,
+                        oldEpisodes = title.totalEpisodes,
+                        newEpisodes = info.newTotalEpisodes,
+                        oldSeasons = title.totalSeasons,
+                        newSeasons = info.newTotalSeasons,
+                        details = info.description
+                    )
+                )
+            }
+        }
+
+        updateResults
+    }
+
+    suspend fun checkSingleTitleUpdate(titleId: Long): com.example.data.model.UpdateResult? = withContext(Dispatchers.IO) {
+        val title = titleDao.getTitleById(titleId).first() ?: return@withContext null
+        val info = searchService.checkTitleForUpdates(title)
+        if (info.hasUpdates) {
+            val updated = title.copy(
+                totalEpisodes = info.newTotalEpisodes,
+                totalSeasons = info.newTotalSeasons,
+                updatedAt = System.currentTimeMillis()
+            )
+            titleDao.update(applyStatusAutomation(updated))
+            return@withContext com.example.data.model.UpdateResult(
+                titleId = title.id,
+                titleName = title.name,
+                category = title.categoryEnum,
+                oldEpisodes = title.totalEpisodes,
+                newEpisodes = info.newTotalEpisodes,
+                oldSeasons = title.totalSeasons,
+                newSeasons = info.newTotalSeasons,
+                details = info.description
+            )
+        }
+        null
+    }
+
+    suspend fun simulateTitleUpdate(titleId: Long, addEpisodes: Int = 2, addSeasons: Int = 0): com.example.data.model.UpdateResult? = withContext(Dispatchers.IO) {
+        val title = titleDao.getTitleById(titleId).first() ?: return@withContext null
+        val newEpisodes = title.totalEpisodes + addEpisodes
+        val newSeasons = title.totalSeasons + addSeasons
+        val updated = title.copy(
+            totalEpisodes = newEpisodes,
+            totalSeasons = newSeasons,
+            updatedAt = System.currentTimeMillis()
+        )
+        titleDao.update(applyStatusAutomation(updated))
+        com.example.data.model.UpdateResult(
+            titleId = title.id,
+            titleName = title.name,
+            category = title.categoryEnum,
+            oldEpisodes = title.totalEpisodes,
+            newEpisodes = newEpisodes,
+            oldSeasons = title.totalSeasons,
+            newSeasons = newSeasons,
+            details = "Simulação: Novos episódios/temporadas adicionados!"
+        )
+    }
 }
+

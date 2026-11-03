@@ -28,6 +28,7 @@ import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Tv
+import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -144,22 +145,42 @@ fun HomeScreen(
                     }
                 }
 
-                // Add button shortcut
-                Box(
-                    modifier = Modifier
-                        .size(40.dp)
-                        .clip(CircleShape)
-                        .background(NeonPurple.copy(alpha = 0.2f))
-                        .border(1.dp, NeonPurple.copy(alpha = 0.6f), CircleShape)
-                        .clickable { viewModel.navigateTo(NavDestination.ADD) },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Add,
-                        contentDescription = "Adicionar Título",
-                        tint = NeonPurple,
-                        modifier = Modifier.size(22.dp)
-                    )
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    // Sync button shortcut
+                    Box(
+                        modifier = Modifier
+                            .size(40.dp)
+                            .clip(CircleShape)
+                            .background(NeonCyan.copy(alpha = 0.15f))
+                            .border(1.dp, NeonCyan.copy(alpha = 0.5f), CircleShape)
+                            .clickable { viewModel.syncAllTitles() },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Sync,
+                            contentDescription = "Buscar Atualizações",
+                            tint = NeonCyan,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+
+                    // Add button shortcut
+                    Box(
+                        modifier = Modifier
+                            .size(40.dp)
+                            .clip(CircleShape)
+                            .background(NeonPurple.copy(alpha = 0.2f))
+                            .border(1.dp, NeonPurple.copy(alpha = 0.6f), CircleShape)
+                            .clickable { viewModel.navigateTo(NavDestination.ADD) },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Add,
+                            contentDescription = "Adicionar Título",
+                            tint = NeonPurple,
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
                 }
             }
         }
