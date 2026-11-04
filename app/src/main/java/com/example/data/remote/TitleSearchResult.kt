@@ -12,6 +12,7 @@ data class TitleSearchResult(
     val totalSeasons: Int = 1,
     val episodesPerSeason: Int = 1,
     val totalEpisodes: Int = 1,
+    val duration: String = "",
     val source: String,
     val externalId: String = "",
     val seasonBreakdown: String = ""

@@ -23,7 +23,10 @@ data class TitleEntity(
     val notes: String = "",
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis(),
-    val lastWatchedAt: Long? = null
+    val lastWatchedAt: Long? = null,
+    val duration: String = "",
+    val isIgnored: Boolean = false,
+    val completedAt: Long? = null
 ) {
     val categoryEnum: Category
         get() = Category.fromString(category)
@@ -34,22 +37,49 @@ data class TitleEntity(
     val isMovie: Boolean
         get() = categoryEnum == Category.FILME
 
+    val effectiveEpisodesPerSeason: Int
+        get() = if (episodesPerSeason > 0) {
+            episodesPerSeason
+        } else if (totalSeasons > 0) {
+            (totalEpisodes / totalSeasons).coerceAtLeast(1)
+        } else {
+            1
+        }
+
+    val totalWatchedEpisodes: Int
+        get() {
+            if (isMovie) return if (statusEnum == WatchStatus.COMPLETO) 1 else 0
+            if (statusEnum == WatchStatus.COMPLETO) return totalEpisodes.coerceAtLeast(1)
+            val prevEpisodes = (currentSeason - 1).coerceAtLeast(0) * effectiveEpisodesPerSeason
+            return (prevEpisodes + currentEpisode).coerceIn(0, totalEpisodes.coerceAtLeast(1))
+        }
+
     val progressPercentage: Float
         get() {
             return if (isMovie) {
                 if (statusEnum == WatchStatus.COMPLETO) 1.0f else 0.0f
             } else {
+                if (statusEnum == WatchStatus.COMPLETO) return 1.0f
                 if (totalEpisodes <= 0) 0f
-                else (currentEpisode.toFloat() / totalEpisodes).coerceIn(0f, 1f)
+                else (totalWatchedEpisodes.toFloat() / totalEpisodes.coerceAtLeast(1)).coerceIn(0f, 1f)
             }
+        }
+
+    val completedDateDisplay: String?
+        get() {
+            val ts = completedAt ?: return null
+            val sdf = java.text.SimpleDateFormat("dd/MM/yyyy", java.util.Locale.getDefault())
+            return sdf.format(java.util.Date(ts))
         }
 
     val progressDisplay: String
         get() {
             return if (isMovie) {
-                if (statusEnum == WatchStatus.COMPLETO) "Assistido" else "Não assistido"
+                val durText = if (duration.isNotBlank()) " • $duration" else ""
+                if (statusEnum == WatchStatus.COMPLETO) "Concluído$durText" else "Filme$durText"
             } else {
-                "T$currentSeason • Ep $currentEpisode/$totalEpisodes (${(progressPercentage * 100).toInt()}%)"
+                val compText = if (statusEnum == WatchStatus.COMPLETO && completedDateDisplay != null) " • Concluído em $completedDateDisplay" else ""
+                "T$currentSeason • Ep $currentEpisode/$totalEpisodes (${(progressPercentage * 100).toInt()}%)$compText"
             }
         }
 }

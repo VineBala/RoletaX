@@ -41,6 +41,9 @@ interface TitleDao {
     @Delete
     suspend fun delete(title: TitleEntity)
 
+    @Query("UPDATE titles SET isIgnored = :isIgnored, updatedAt = :updatedAt WHERE id = :id")
+    suspend fun updateIgnored(id: Long, isIgnored: Boolean, updatedAt: Long = System.currentTimeMillis())
+
     @Query("DELETE FROM titles WHERE id = :id")
     suspend fun deleteById(id: Long)
 

@@ -705,7 +705,11 @@ private fun InProgressHorizontalCard(
                 Spacer(modifier = Modifier.height(2.dp))
 
                 Text(
-                    text = if (title.isMovie) "Assistindo" else "Ep ${title.currentEpisode}/${title.totalEpisodes}",
+                    text = if (title.isMovie) {
+                        if (title.duration.isNotBlank()) "Filme • ${title.duration}" else "Filme"
+                    } else {
+                        "Ep ${title.currentEpisode}/${title.totalEpisodes}"
+                    },
                     color = NeonCyan,
                     fontSize = 11.sp,
                     fontWeight = FontWeight.SemiBold

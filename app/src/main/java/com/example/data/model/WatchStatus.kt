@@ -12,13 +12,17 @@ enum class WatchStatus(
     val shortLabel: String,
     val color: Color
 ) {
-    EM_ANDAMENTO("Em Andamento", "Assistindo", StatusGreen),
-    BLOQUEADO("Bloqueado / Abandonado", "Bloqueado", StatusRed),
-    COMPLETO("Completo", "Concluído", StatusBlue),
+    BLOQUEADO("Bloqueado", "Bloquear", StatusRed),
+    COMPLETO("Concluído", "Concluir", StatusBlue),
+    // Estados mantidos internamente para compatibilidade de dados legados
+    EM_ANDAMENTO("Em Andamento", "Em Andamento", StatusGreen),
     PAUSADO("Pausado", "Pausado", StatusYellow),
-    PENDENTE("Pendente", "Na Fila", StatusGray);
+    PENDENTE("Pendente", "Pendente", StatusGray);
 
     companion object {
+        // O catálogo exibe exclusivamente Bloquear e Concluir
+        val activeCatalogStatuses = listOf(BLOQUEADO, COMPLETO)
+
         fun fromString(value: String): WatchStatus {
             return entries.firstOrNull { 
                 it.name.equals(value, ignoreCase = true) || 

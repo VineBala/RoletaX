@@ -103,9 +103,54 @@ fun RouletteScreen(
     val isSpinning by viewModel.isSpinning.collectAsStateWithLifecycle()
     val winner by viewModel.rouletteWinner.collectAsStateWithLifecycle()
 
+    val activeRouletteTitle by viewModel.activeRouletteTitle.collectAsStateWithLifecycle()
+    val showRouletteResult by viewModel.showRouletteResult.collectAsStateWithLifecycle()
+
     val eligibleTitles = viewModel.getEligibleTitles()
     var targetWinnerIndex by remember { mutableIntStateOf(0) }
     var selectedWinnerTitle by remember { mutableStateOf<TitleEntity?>(null) }
+
+    // NOVA INTERFACE DE RESULTADO DA ROLETA
+    if (showRouletteResult && activeRouletteTitle != null) {
+        RouletteResultView(
+            title = activeRouletteTitle!!,
+            onBack = { viewModel.setShowRouletteResult(false) },
+            onSpinAgain = {
+                viewModel.setShowRouletteResult(false)
+                viewModel.spinRoulette { chosenWinner, chosenIndex ->
+                    selectedWinnerTitle = chosenWinner
+                    targetWinnerIndex = chosenIndex
+                }
+            },
+            onAdvanceEpisode = { delta ->
+                viewModel.advanceEpisode(activeRouletteTitle!!, delta)
+            },
+            onToggleMovieWatched = {
+                viewModel.toggleMovieWatched(activeRouletteTitle!!)
+            },
+            onSaveUpdatedTitle = { updated ->
+                viewModel.updateTitleDirectly(updated)
+            },
+            onAddNewTitle = { newTitle ->
+                viewModel.startNewTitleForm(newTitle.categoryEnum)
+                viewModel.updateFormField {
+                    it.copy(
+                        name = newTitle.name,
+                        category = newTitle.categoryEnum,
+                        releaseYear = newTitle.releaseYear,
+                        genre = newTitle.genre,
+                        totalSeasons = newTitle.totalSeasons,
+                        totalEpisodes = newTitle.totalEpisodes,
+                        duration = newTitle.duration,
+                        status = newTitle.statusEnum
+                    )
+                }
+                viewModel.saveCurrentForm()
+            },
+            modifier = modifier
+        )
+        return
+    }
 
     LazyColumn(
         modifier = modifier
@@ -147,6 +192,108 @@ fun RouletteScreen(
                     fontSize = 12.sp,
                     textAlign = TextAlign.Center
                 )
+            }
+        }
+
+        // Card do Último Resultado Sorteado (permanece salvo e acessível a qualquer momento)
+        activeRouletteTitle?.let { activeTitle ->
+            item {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("roulette_active_result_card")
+                        .clickable { viewModel.setShowRouletteResult(true) },
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = GraphiteSurface),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, NeonPurple.copy(alpha = 0.8f))
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(
+                            modifier = Modifier.weight(1f),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(width = 44.dp, height = 62.dp)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(GraphiteDark)
+                                    .border(1.dp, NeonCyan.copy(alpha = 0.5f), RoundedCornerShape(8.dp))
+                            ) {
+                                if (activeTitle.coverUrl.isNotBlank()) {
+                                    AsyncImage(
+                                        model = activeTitle.coverUrl,
+                                        contentDescription = activeTitle.name,
+                                        contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                                        modifier = Modifier.fillMaxSize()
+                                    )
+                                } else {
+                                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                        Icon(
+                                            imageVector = activeTitle.categoryEnum.icon,
+                                            contentDescription = null,
+                                            tint = NeonPurple,
+                                            modifier = Modifier.size(24.dp)
+                                        )
+                                    }
+                                }
+                            }
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        imageVector = Icons.Default.AutoAwesome,
+                                        contentDescription = null,
+                                        tint = NeonCyan,
+                                        modifier = Modifier.size(12.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(
+                                        text = "ÚLTIMO SORTEIO ATIVO",
+                                        color = NeonCyan,
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Black,
+                                        letterSpacing = 0.5.sp
+                                    )
+                                }
+                                Text(
+                                    text = activeTitle.name,
+                                    color = TextPrimary,
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Text(
+                                    text = if (activeTitle.isMovie) {
+                                        if (activeTitle.duration.isNotBlank()) "Filme • ${activeTitle.duration}" else "Filme"
+                                    } else {
+                                        "Ep ${activeTitle.currentEpisode}/${activeTitle.totalEpisodes} • Temp ${activeTitle.currentSeason}"
+                                    },
+                                    color = TextSecondary,
+                                    fontSize = 11.sp
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.width(8.dp))
+
+                        Button(
+                            onClick = { viewModel.setShowRouletteResult(true) },
+                            shape = RoundedCornerShape(10.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = NeonPurple),
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                            modifier = Modifier.testTag("open_roulette_result_button")
+                        ) {
+                            Text("Ver Resultado", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
             }
         }
 
@@ -274,7 +421,7 @@ fun RouletteScreen(
                             horizontalArrangement = Arrangement.spacedBy(6.dp),
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            items(WatchStatus.entries) { status ->
+                            items(WatchStatus.activeCatalogStatuses) { status ->
                                 val isChecked = customStatus.contains(status)
                                 FilterChip(
                                     selected = isChecked,
@@ -392,19 +539,6 @@ fun RouletteScreen(
                         onCheckedChange = { viewModel.toggleRouletteExcludeCompleted() }
                     )
 
-                    // Sortear somente pendentes
-                    RouletteToggleItem(
-                        label = "Sortear somente pendentes (não iniciados)",
-                        checked = onlyPending,
-                        onCheckedChange = { viewModel.toggleRouletteOnlyPending() }
-                    )
-
-                    // Sortear somente em andamento
-                    RouletteToggleItem(
-                        label = "Sortear somente em andamento",
-                        checked = onlyInProgress,
-                        onCheckedChange = { viewModel.toggleRouletteOnlyInProgress() }
-                    )
 
                     // Evitar repetir último
                     RouletteToggleItem(
@@ -415,26 +549,6 @@ fun RouletteScreen(
                 }
             }
         }
-    }
-
-    // Winner Dialog with Celebration
-    if (winner != null) {
-        WinnerCelebrationDialog(
-            title = winner!!,
-            onDismiss = { viewModel.closeWinnerDialog() },
-            onOpenDetails = {
-                val chosen = winner!!
-                viewModel.closeWinnerDialog()
-                viewModel.openTitleDetails(chosen)
-            },
-            onSpinAgain = {
-                viewModel.closeWinnerDialog()
-                viewModel.spinRoulette { chosenWinner, chosenIndex ->
-                    selectedWinnerTitle = chosenWinner
-                    targetWinnerIndex = chosenIndex
-                }
-            }
-        )
     }
 }
 

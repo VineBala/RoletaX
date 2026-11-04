@@ -1,6 +1,7 @@
 package com.example.viewmodel
 
 import android.app.Application
+import android.content.Context
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.data.local.AppDatabase
@@ -11,6 +12,9 @@ import com.example.data.model.WatchStatus
 import com.example.data.remote.TitleSearchResult
 import com.example.data.repository.TitleRepository
 import com.example.util.NotificationHelper
+import java.io.InputStream
+import java.io.OutputStream
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -20,6 +24,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlin.random.Random
 
 enum class NavDestination(val title: String) {
@@ -58,7 +63,10 @@ data class TitleFormState(
     val currentSeason: Int = 1,
     val currentEpisode: Int = 0,
     val totalEpisodes: Int = 1,
+    val duration: String = "",
     val status: WatchStatus = WatchStatus.PENDENTE,
+    val isIgnored: Boolean = false,
+    val completedAt: Long? = null,
     val personalRating: Float = 0f,
     val notes: String = "",
     val isEditing: Boolean = false
@@ -67,12 +75,22 @@ data class TitleFormState(
 class SeraAkisosViewModel(application: Application) : AndroidViewModel(application) {
 
     private val repository: TitleRepository
+    private val roulettePrefs = application.getSharedPreferences("vortex_roulette_prefs", Context.MODE_PRIVATE)
+    private val appPrefs = application.getSharedPreferences("vortex_user_prefs", Context.MODE_PRIVATE)
+    private val _hasSeenWelcome = MutableStateFlow(appPrefs.getBoolean("has_seen_welcome_v2", false))
+    val hasSeenWelcome: StateFlow<Boolean> = _hasSeenWelcome.asStateFlow()
+
+    private val _activeWinnerId = MutableStateFlow<Long?>(null)
 
     init {
         val database = AppDatabase.getDatabase(application)
         repository = TitleRepository(database.titleDao())
         viewModelScope.launch {
             repository.seedSampleDataIfEmpty()
+        }
+        val savedWinnerId = roulettePrefs.getLong("active_roulette_winner_id", -1L)
+        if (savedWinnerId > 0) {
+            _activeWinnerId.value = savedWinnerId
         }
     }
 
@@ -141,6 +159,9 @@ class SeraAkisosViewModel(application: Application) : AndroidViewModel(applicati
     private val _selectedSort = MutableStateFlow(LibrarySort.RECENT_UPDATE)
     val selectedSort = _selectedSort.asStateFlow()
 
+    private val _showOnlyIgnored = MutableStateFlow(false)
+    val showOnlyIgnored = _showOnlyIgnored.asStateFlow()
+
     fun setLibrarySearchQuery(q: String) {
         _librarySearchQuery.value = q
     }
@@ -157,18 +178,48 @@ class SeraAkisosViewModel(application: Application) : AndroidViewModel(applicati
         _selectedSort.value = sort
     }
 
-    // Filtered Titles stream
-    val filteredTitles: StateFlow<List<TitleEntity>> = combine(
-        allTitles,
+    fun toggleShowOnlyIgnored() {
+        _showOnlyIgnored.value = !_showOnlyIgnored.value
+    }
+
+    fun clearFilters() {
+        _librarySearchQuery.value = ""
+        _selectedCategoryFilter.value = null
+        _selectedStatusFilter.value = null
+        _showOnlyIgnored.value = false
+    }
+
+    private data class LibraryFilterCriteria(
+        val query: String,
+        val category: Category?,
+        val status: WatchStatus?,
+        val sort: LibrarySort,
+        val onlyIgnored: Boolean
+    )
+
+    private val _libraryFilterCriteria = combine(
         _librarySearchQuery,
         _selectedCategoryFilter,
         _selectedStatusFilter,
-        _selectedSort
-    ) { titles, query, category, status, sort ->
+        _selectedSort,
+        _showOnlyIgnored
+    ) { query, category, status, sort, onlyIgnored ->
+        LibraryFilterCriteria(query, category, status, sort, onlyIgnored)
+    }
+
+    // Filtered Titles stream
+    val filteredTitles: StateFlow<List<TitleEntity>> = combine(
+        allTitles,
+        _libraryFilterCriteria
+    ) { titles, criteria ->
         var list = titles
 
-        if (query.isNotBlank()) {
-            val q = query.trim().lowercase()
+        if (criteria.onlyIgnored) {
+            list = list.filter { it.isIgnored }
+        }
+
+        if (criteria.query.isNotBlank()) {
+            val q = criteria.query.trim().lowercase()
             list = list.filter {
                 it.name.lowercase().contains(q) ||
                 it.genre.lowercase().contains(q) ||
@@ -177,15 +228,15 @@ class SeraAkisosViewModel(application: Application) : AndroidViewModel(applicati
             }
         }
 
-        if (category != null) {
-            list = list.filter { it.categoryEnum == category }
+        if (criteria.category != null) {
+            list = list.filter { it.categoryEnum == criteria.category }
         }
 
-        if (status != null) {
-            list = list.filter { it.statusEnum == status }
+        if (criteria.status != null) {
+            list = list.filter { it.statusEnum == criteria.status }
         }
 
-        when (sort) {
+        when (criteria.sort) {
             LibrarySort.RECENT_UPDATE -> list.sortedByDescending { it.updatedAt }
             LibrarySort.TITLE_ASC -> list.sortedBy { it.name.lowercase() }
             LibrarySort.TITLE_DESC -> list.sortedByDescending { it.name.lowercase() }
@@ -200,9 +251,15 @@ class SeraAkisosViewModel(application: Application) : AndroidViewModel(applicati
     val formState = _formState.asStateFlow()
 
     fun startNewTitleForm(prefillCategory: Category = Category.FILME) {
+        val isMovie = prefillCategory == Category.FILME
         _formState.value = TitleFormState(
             category = prefillCategory,
-            currentEpisode = if (prefillCategory == Category.FILME) 0 else 1,
+            totalSeasons = if (isMovie) 0 else 1,
+            episodesPerSeason = if (isMovie) 0 else 1,
+            currentSeason = if (isMovie) 0 else 1,
+            currentEpisode = 0,
+            totalEpisodes = if (isMovie) 0 else 1,
+            duration = "",
             isEditing = false
         )
     }
@@ -221,7 +278,10 @@ class SeraAkisosViewModel(application: Application) : AndroidViewModel(applicati
             currentSeason = title.currentSeason,
             currentEpisode = title.currentEpisode,
             totalEpisodes = title.totalEpisodes,
+            duration = title.duration,
             status = title.statusEnum,
+            isIgnored = title.isIgnored,
+            completedAt = title.completedAt,
             personalRating = title.personalRating,
             notes = title.notes,
             isEditing = true
@@ -230,6 +290,7 @@ class SeraAkisosViewModel(application: Application) : AndroidViewModel(applicati
     }
 
     fun prefillFromSearchResult(result: TitleSearchResult) {
+        val isMovie = result.category == Category.FILME
         _formState.value = TitleFormState(
             name = result.title,
             coverUrl = result.coverUrl,
@@ -237,12 +298,15 @@ class SeraAkisosViewModel(application: Application) : AndroidViewModel(applicati
             category = result.category,
             releaseYear = result.releaseYear,
             genre = result.genre,
-            totalSeasons = result.totalSeasons.coerceAtLeast(1),
-            episodesPerSeason = result.episodesPerSeason.coerceAtLeast(1),
-            currentSeason = 1,
-            currentEpisode = if (result.category == Category.FILME) 0 else 1,
-            totalEpisodes = result.totalEpisodes.coerceAtLeast(1),
+            totalSeasons = if (isMovie) 0 else result.totalSeasons.coerceAtLeast(1),
+            episodesPerSeason = if (isMovie) 0 else result.episodesPerSeason.coerceAtLeast(1),
+            currentSeason = if (isMovie) 0 else 1,
+            currentEpisode = 0,
+            totalEpisodes = if (isMovie) 0 else result.totalEpisodes.coerceAtLeast(1),
+            duration = if (isMovie) result.duration else "",
             status = WatchStatus.PENDENTE,
+            isIgnored = false,
+            completedAt = null,
             personalRating = 0f,
             notes = if (result.seasonBreakdown.isNotBlank()) "Origem: ${result.source} • ${result.seasonBreakdown}" else "Origem: ${result.source}",
             isEditing = false
@@ -261,6 +325,12 @@ class SeraAkisosViewModel(application: Application) : AndroidViewModel(applicati
         }
 
         viewModelScope.launch {
+            val isMovie = form.category == Category.FILME
+            val calcCompletedAt = if (form.status == WatchStatus.COMPLETO) {
+                form.completedAt ?: System.currentTimeMillis()
+            } else {
+                null
+            }
             val entity = TitleEntity(
                 id = form.id ?: 0L,
                 name = form.name.trim(),
@@ -269,11 +339,14 @@ class SeraAkisosViewModel(application: Application) : AndroidViewModel(applicati
                 category = form.category.name,
                 releaseYear = form.releaseYear,
                 genre = form.genre.trim(),
-                totalSeasons = form.totalSeasons.coerceAtLeast(1),
-                episodesPerSeason = form.episodesPerSeason.coerceAtLeast(1),
-                currentSeason = form.currentSeason.coerceAtLeast(1),
-                currentEpisode = form.currentEpisode.coerceAtLeast(0),
-                totalEpisodes = form.totalEpisodes.coerceAtLeast(1),
+                totalSeasons = if (isMovie) 0 else form.totalSeasons.coerceAtLeast(1),
+                episodesPerSeason = if (isMovie) 0 else form.episodesPerSeason.coerceAtLeast(1),
+                currentSeason = if (isMovie) 0 else form.currentSeason.coerceAtLeast(1),
+                currentEpisode = if (isMovie) 0 else form.currentEpisode.coerceAtLeast(0),
+                totalEpisodes = if (isMovie) 0 else form.totalEpisodes.coerceAtLeast(1),
+                duration = if (isMovie) form.duration.trim() else "",
+                isIgnored = form.isIgnored,
+                completedAt = calcCompletedAt,
                 status = form.status.name,
                 personalRating = form.personalRating.coerceIn(0f, 10f),
                 notes = form.notes.trim(),
@@ -301,34 +374,27 @@ class SeraAkisosViewModel(application: Application) : AndroidViewModel(applicati
     fun advanceEpisode(title: TitleEntity, delta: Int) {
         viewModelScope.launch {
             repository.advanceEpisode(title.id, delta)
-            // Update in-memory selected title if visible
-            val newEp = (title.currentEpisode + delta).coerceIn(0, title.totalEpisodes.coerceAtLeast(1))
-            val newStatus = if (title.totalEpisodes > 0 && newEp >= title.totalEpisodes) {
-                WatchStatus.COMPLETO.name
-            } else if (newEp > 0 && title.status == WatchStatus.PENDENTE.name) {
-                WatchStatus.EM_ANDAMENTO.name
-            } else {
-                title.status
-            }
-            if (_selectedTitle.value?.id == title.id) {
-                _selectedTitle.value = title.copy(currentEpisode = newEp, status = newStatus)
-            }
         }
     }
 
     fun toggleMovieWatched(title: TitleEntity) {
         viewModelScope.launch {
             repository.toggleMovieWatched(title.id)
-            if (_selectedTitle.value?.id == title.id) {
-                val next = if (title.statusEnum == WatchStatus.COMPLETO) WatchStatus.PENDENTE else WatchStatus.COMPLETO
-                _selectedTitle.value = title.copy(status = next.name)
-            }
         }
     }
 
     fun updateStatus(title: TitleEntity, newStatus: WatchStatus) {
         viewModelScope.launch {
-            val updated = title.copy(status = newStatus.name, updatedAt = System.currentTimeMillis())
+            val newCompletedAt = if (newStatus == WatchStatus.COMPLETO) {
+                title.completedAt ?: System.currentTimeMillis()
+            } else {
+                null
+            }
+            val updated = title.copy(
+                status = newStatus.name,
+                completedAt = newCompletedAt,
+                updatedAt = System.currentTimeMillis()
+            )
             repository.update(updated)
             if (_selectedTitle.value?.id == title.id) {
                 _selectedTitle.value = updated
@@ -439,6 +505,19 @@ class SeraAkisosViewModel(application: Application) : AndroidViewModel(applicati
     private val _rouletteWinner = MutableStateFlow<TitleEntity?>(null)
     val rouletteWinner = _rouletteWinner.asStateFlow()
 
+    val activeWinnerId = _activeWinnerId.asStateFlow()
+
+    val activeRouletteTitle: StateFlow<TitleEntity?> = combine(_activeWinnerId, allTitles) { id, titles ->
+        if (id != null && id > 0) titles.find { it.id == id } else null
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
+    private val _showRouletteResult = MutableStateFlow(false)
+    val showRouletteResult = _showRouletteResult.asStateFlow()
+
+    fun setShowRouletteResult(show: Boolean) {
+        _showRouletteResult.value = show
+    }
+
     private val _isSpinning = MutableStateFlow(false)
     val isSpinning = _isSpinning.asStateFlow()
 
@@ -480,8 +559,48 @@ class SeraAkisosViewModel(application: Application) : AndroidViewModel(applicati
         _rouletteCustomStatus.value = current
     }
 
+    fun toggleIgnoreTitle(title: TitleEntity) {
+        viewModelScope.launch {
+            val newIgnored = repository.toggleIgnored(title.id)
+            if (_selectedTitle.value?.id == title.id) {
+                _selectedTitle.value = _selectedTitle.value?.copy(isIgnored = newIgnored)
+            }
+            if (newIgnored) {
+                showMessage("'${title.name}' ignorado nos sorteios da roleta.")
+            } else {
+                showMessage("'${title.name}' desbloqueado para os sorteios da roleta.")
+            }
+        }
+    }
+
+    fun updateTitleDirectly(updated: TitleEntity) {
+        viewModelScope.launch {
+            val calcCompletedAt = if (updated.statusEnum == WatchStatus.COMPLETO) {
+                updated.completedAt ?: System.currentTimeMillis()
+            } else {
+                null
+            }
+            val sanitized = updated.copy(
+                completedAt = calcCompletedAt,
+                updatedAt = System.currentTimeMillis()
+            )
+            repository.update(sanitized)
+            if (_selectedTitle.value?.id == sanitized.id) {
+                _selectedTitle.value = sanitized
+            }
+            showMessage("Alterações em '${sanitized.name}' salvas com sucesso!")
+        }
+    }
+
     fun closeWinnerDialog() {
         _rouletteWinner.value = null
+    }
+
+    fun clearRouletteResult() {
+        _activeWinnerId.value = null
+        _rouletteWinner.value = null
+        _showRouletteResult.value = false
+        roulettePrefs.edit().remove("active_roulette_winner_id").apply()
     }
 
     // Calculates eligible titles for the roulette based on current mode and filters
@@ -489,11 +608,15 @@ class SeraAkisosViewModel(application: Application) : AndroidViewModel(applicati
         val all = allTitles.value
         if (all.isEmpty()) return emptyList()
 
+        // Regra fundamental: Títulos ignorados NUNCA podem ser sorteados
+        val notIgnored = all.filter { !it.isIgnored }
+        if (notIgnored.isEmpty()) return emptyList()
+
         var eligible = when (_rouletteMode.value) {
-            RouletteMode.GERAL -> all
-            RouletteMode.CATEGORIA -> all.filter { it.categoryEnum == _rouletteCategory.value }
+            RouletteMode.GERAL -> notIgnored
+            RouletteMode.CATEGORIA -> notIgnored.filter { it.categoryEnum == _rouletteCategory.value }
             RouletteMode.PERSONALIZADA -> {
-                all.filter { _rouletteCustomStatus.value.contains(it.statusEnum) }
+                notIgnored.filter { _rouletteCustomStatus.value.contains(it.statusEnum) }
             }
         }
 
@@ -541,11 +664,49 @@ class SeraAkisosViewModel(application: Application) : AndroidViewModel(applicati
     fun finishSpin(winner: TitleEntity) {
         _isSpinning.value = false
         _rouletteWinner.value = winner
+        _activeWinnerId.value = winner.id
+        roulettePrefs.edit().putLong("active_roulette_winner_id", winner.id).apply()
+        _showRouletteResult.value = true
     }
 
-    // Backup & Settings
+    // Welcome Screen Flow
+    fun dismissWelcome() {
+        appPrefs.edit().putBoolean("has_seen_welcome_v2", true).apply()
+        _hasSeenWelcome.value = true
+    }
+
+    fun showWelcomeScreen() {
+        _hasSeenWelcome.value = false
+    }
+
+    // Backup & Settings (ZIP and JSON support)
     fun exportBackupJson(): String {
         return repository.exportToJson(allTitles.value)
+    }
+
+    fun exportBackupZip(outputStream: OutputStream) {
+        try {
+            repository.exportToZip(allTitles.value, outputStream)
+            showMessage("Backup .zip exportado com sucesso!")
+        } catch (e: Exception) {
+            showMessage("Erro ao exportar backup .zip.")
+        }
+    }
+
+    fun importBackupStream(inputStream: InputStream, onComplete: (Boolean, Int) -> Unit) {
+        viewModelScope.launch {
+            try {
+                val json = withContext(Dispatchers.IO) {
+                    repository.readBackupStream(inputStream)
+                }
+                val count = repository.importFromJson(json)
+                onComplete(true, count)
+                showMessage("$count títulos restaurados com sucesso do backup!")
+            } catch (e: Exception) {
+                onComplete(false, 0)
+                showMessage("Erro ao ler backup: ${e.message ?: "arquivo inválido"}")
+            }
+        }
     }
 
     fun importBackupJson(json: String, onComplete: (Boolean, Int) -> Unit) {

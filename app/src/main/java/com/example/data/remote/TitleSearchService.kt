@@ -347,6 +347,22 @@ class TitleSearchService {
                     artwork = artwork.replace("100x100bb.jpg", "600x600bb.jpg")
                 }
 
+                // Parse duration from trackTimeMillis
+                val trackTimeMillis = item.optLong("trackTimeMillis", 0L)
+                val durationFormatted = if (trackTimeMillis > 0L) {
+                    val totalMinutes = (trackTimeMillis / 60000L).toInt()
+                    val hours = totalMinutes / 60
+                    val minutes = totalMinutes % 60
+                    when {
+                        hours > 0 && minutes > 0 -> "${hours}h ${minutes}m"
+                        hours > 0 -> "${hours}h"
+                        minutes > 0 -> "${minutes}m"
+                        else -> ""
+                    }
+                } else {
+                    ""
+                }
+
                 results.add(
                     TitleSearchResult(
                         title = title,
@@ -355,12 +371,13 @@ class TitleSearchService {
                         category = Category.FILME,
                         releaseYear = year,
                         genre = genre,
-                        totalSeasons = 1,
-                        episodesPerSeason = 1,
-                        totalEpisodes = 1,
+                        totalSeasons = 0,
+                        episodesPerSeason = 0,
+                        totalEpisodes = 0,
+                        duration = durationFormatted,
                         source = "iTunes Movie DB",
                         externalId = item.optLong("trackId", 0L).toString(),
-                        seasonBreakdown = "Filme completo"
+                        seasonBreakdown = if (durationFormatted.isNotBlank()) "Duração: $durationFormatted" else "Filme"
                     )
                 )
             }

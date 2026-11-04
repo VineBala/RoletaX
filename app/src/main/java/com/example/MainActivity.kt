@@ -143,6 +143,9 @@ fun SeraAkisosApp(viewModel: SeraAkisosViewModel) {
             onDelete = {
                 viewModel.deleteTitle(title)
             },
+            onToggleIgnore = {
+                viewModel.toggleIgnoreTitle(title)
+            },
             onCheckUpdates = {
                 viewModel.syncSingleTitle(title)
             }

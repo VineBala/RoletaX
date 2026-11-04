@@ -18,6 +18,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.Star
@@ -46,6 +47,7 @@ import com.example.data.model.WatchStatus
 import com.example.ui.theme.ElectricBlue
 import com.example.ui.theme.GraphiteBorder
 import com.example.ui.theme.GraphiteSurface
+import com.example.ui.theme.GraphiteSurfaceVariant
 import com.example.ui.theme.NeonCyan
 import com.example.ui.theme.NeonPurple
 import com.example.ui.theme.TextPrimary
@@ -56,6 +58,7 @@ fun TitleCard(
     title: TitleEntity,
     onClick: () -> Unit,
     onQuickAction: () -> Unit,
+    onToggleIgnore: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     Card(
@@ -67,7 +70,10 @@ fun TitleCard(
         colors = CardDefaults.cardColors(
             containerColor = GraphiteSurface
         ),
-        border = androidx.compose.foundation.BorderStroke(1.dp, GraphiteBorder.copy(alpha = 0.6f))
+        border = androidx.compose.foundation.BorderStroke(
+            1.dp,
+            if (title.isIgnored) Color(0xFFFF5252).copy(alpha = 0.85f) else GraphiteBorder.copy(alpha = 0.6f)
+        )
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
             // Poster area with overlay tags
@@ -158,7 +164,7 @@ fun TitleCard(
                     }
                 }
 
-                // Bottom gradient with Status Badge
+                // Bottom gradient with Status Badge and Ignored Badge
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -170,7 +176,38 @@ fun TitleCard(
                         )
                         .padding(horizontal = 8.dp, vertical = 6.dp)
                 ) {
-                    StatusBadge(status = title.statusEnum, useShortLabel = true)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        StatusBadge(status = title.statusEnum, useShortLabel = true)
+
+                        if (title.isIgnored) {
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .background(Color(0xFFEF4444).copy(alpha = 0.9f))
+                                    .padding(horizontal = 5.dp, vertical = 2.dp)
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        imageVector = Icons.Default.Block,
+                                        contentDescription = "Ignorado na Roleta",
+                                        tint = Color.White,
+                                        modifier = Modifier.size(10.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(3.dp))
+                                    Text(
+                                        text = "IGNORADO",
+                                        color = Color.White,
+                                        fontSize = 9.sp,
+                                        fontWeight = FontWeight.Black
+                                    )
+                                }
+                            }
+                        }
+                    }
                 }
             }
 
@@ -214,58 +251,104 @@ fun TitleCard(
 
                 Spacer(modifier = Modifier.height(6.dp))
 
-                // Progress Info & Quick Action Button
+                // Progress Info
+                Text(
+                    text = if (title.isMovie) {
+                        if (title.duration.isNotBlank()) title.duration else "Filme"
+                    } else {
+                        "Ep ${title.currentEpisode}/${title.totalEpisodes}"
+                    },
+                    color = TextSecondary,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // Novo Catálogo: Ações de Ignorar e Concluir
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(
-                        text = if (title.isMovie) {
-                            if (title.statusEnum == WatchStatus.COMPLETO) "Assistido" else "Não assistido"
-                        } else {
-                            "Ep ${title.currentEpisode}/${title.totalEpisodes}"
-                        },
-                        color = TextSecondary,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Medium
-                    )
+                    // Novo Botão: Ignorar (impede o título de ser sorteado na roleta)
+                    if (onToggleIgnore != null) {
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(
+                                    if (title.isIgnored) Color(0xFFEF4444) else GraphiteSurfaceVariant
+                                )
+                                .border(
+                                    1.dp,
+                                    if (title.isIgnored) Color(0xFFEF4444) else GraphiteBorder,
+                                    RoundedCornerShape(8.dp)
+                                )
+                                .clickable(onClick = onToggleIgnore)
+                                .padding(vertical = 6.dp, horizontal = 4.dp)
+                                .testTag("toggle_ignore_${title.id}"),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Block,
+                                    contentDescription = null,
+                                    tint = if (title.isIgnored) Color.White else Color(0xFFEF4444),
+                                    modifier = Modifier.size(12.dp)
+                                )
+                                Spacer(modifier = Modifier.width(3.dp))
+                                Text(
+                                    text = if (title.isIgnored) "Ignorado" else "Ignorar",
+                                    color = if (title.isIgnored) Color.White else Color(0xFFEF4444),
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    maxLines = 1
+                                )
+                            }
+                        }
+                    }
 
-                    // Quick Action Button
+                    // Botão: Concluir
                     Box(
                         modifier = Modifier
-                            .size(32.dp)
-                            .clip(CircleShape)
+                            .weight(1f)
+                            .clip(RoundedCornerShape(8.dp))
                             .background(
-                                if (title.isMovie && title.statusEnum == WatchStatus.COMPLETO)
-                                    NeonPurple.copy(alpha = 0.2f)
-                                else
-                                    NeonCyan.copy(alpha = 0.15f)
+                                if (title.statusEnum == WatchStatus.COMPLETO) NeonPurple else GraphiteSurfaceVariant
                             )
                             .border(
                                 1.dp,
-                                if (title.isMovie && title.statusEnum == WatchStatus.COMPLETO)
-                                    NeonPurple.copy(alpha = 0.5f)
-                                else
-                                    NeonCyan.copy(alpha = 0.5f),
-                                CircleShape
+                                if (title.statusEnum == WatchStatus.COMPLETO) NeonPurple else GraphiteBorder,
+                                RoundedCornerShape(8.dp)
                             )
-                            .clickable(onClick = onQuickAction),
+                            .clickable(onClick = onQuickAction)
+                            .padding(vertical = 6.dp, horizontal = 4.dp)
+                            .testTag("quick_action_${title.id}"),
                         contentAlignment = Alignment.Center
                     ) {
-                        if (title.isMovie) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center
+                        ) {
                             Icon(
                                 imageVector = Icons.Default.Check,
-                                contentDescription = "Alternar assistido",
-                                tint = if (title.statusEnum == WatchStatus.COMPLETO) NeonPurple else NeonCyan,
-                                modifier = Modifier.size(16.dp)
+                                contentDescription = null,
+                                tint = if (title.statusEnum == WatchStatus.COMPLETO) Color.White else NeonCyan,
+                                modifier = Modifier.size(12.dp)
                             )
-                        } else {
-                            Icon(
-                                imageVector = Icons.Default.Add,
-                                contentDescription = "Avançar episódio",
-                                tint = NeonCyan,
-                                modifier = Modifier.size(16.dp)
+                            Spacer(modifier = Modifier.width(3.dp))
+                            Text(
+                                text = if (title.statusEnum == WatchStatus.COMPLETO) "Concluído" else "Concluir",
+                                color = if (title.statusEnum == WatchStatus.COMPLETO) Color.White else TextPrimary,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1
                             )
                         }
                     }

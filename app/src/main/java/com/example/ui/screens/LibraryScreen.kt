@@ -25,6 +25,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.Search
@@ -83,6 +84,7 @@ fun LibraryScreen(
     val selectedCategory by viewModel.selectedCategoryFilter.collectAsStateWithLifecycle()
     val selectedStatus by viewModel.selectedStatusFilter.collectAsStateWithLifecycle()
     val selectedSort by viewModel.selectedSort.collectAsStateWithLifecycle()
+    val showOnlyIgnored by viewModel.showOnlyIgnored.collectAsStateWithLifecycle()
 
     val isSyncingTitles by viewModel.isSyncingTitles.collectAsStateWithLifecycle()
     val syncProgressText by viewModel.syncProgressText.collectAsStateWithLifecycle()
@@ -306,9 +308,12 @@ fun LibraryScreen(
         ) {
             item {
                 FilterChip(
-                    selected = selectedStatus == null,
-                    onClick = { viewModel.setStatusFilter(null) },
-                    label = { Text("Todos Status", fontSize = 11.sp) },
+                    selected = selectedStatus == null && !showOnlyIgnored,
+                    onClick = {
+                        viewModel.setStatusFilter(null)
+                        if (showOnlyIgnored) viewModel.toggleShowOnlyIgnored()
+                    },
+                    label = { Text("Todos", fontSize = 11.sp, fontWeight = FontWeight.Bold) },
                     colors = FilterChipDefaults.filterChipColors(
                         selectedContainerColor = NeonCyan,
                         selectedLabelColor = Color.Black,
@@ -317,18 +322,42 @@ fun LibraryScreen(
                     )
                 )
             }
-            items(WatchStatus.entries) { status ->
+            // Apenas os botões do Novo Catálogo: Bloquear e Concluir (assistir e na fila removidos)
+            items(WatchStatus.activeCatalogStatuses) { status ->
                 FilterChip(
-                    selected = selectedStatus == status,
+                    selected = selectedStatus == status && !showOnlyIgnored,
                     onClick = {
+                        if (showOnlyIgnored) viewModel.toggleShowOnlyIgnored()
                         viewModel.setStatusFilter(if (selectedStatus == status) null else status)
                     },
-                    label = { Text(status.label, fontSize = 11.sp) },
+                    label = { Text(status.label, fontSize = 11.sp, fontWeight = FontWeight.Bold) },
                     colors = FilterChipDefaults.filterChipColors(
                         selectedContainerColor = status.color,
                         selectedLabelColor = Color.White,
                         containerColor = GraphiteSurface,
                         labelColor = TextSecondary
+                    )
+                )
+            }
+            // Novo Botão / Filtro: Ignorar
+            item {
+                FilterChip(
+                    selected = showOnlyIgnored,
+                    onClick = { viewModel.toggleShowOnlyIgnored() },
+                    leadingIcon = {
+                        Icon(
+                            imageVector = Icons.Default.Block,
+                            contentDescription = null,
+                            tint = if (showOnlyIgnored) Color.White else Color(0xFFEF4444),
+                            modifier = Modifier.size(12.dp)
+                        )
+                    },
+                    label = { Text("Ignorar", fontSize = 11.sp, fontWeight = FontWeight.Bold) },
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = Color(0xFFEF4444),
+                        selectedLabelColor = Color.White,
+                        containerColor = GraphiteSurface,
+                        labelColor = Color(0xFFEF4444)
                     )
                 )
             }
@@ -371,9 +400,7 @@ fun LibraryScreen(
                     Spacer(modifier = Modifier.height(16.dp))
                     Button(
                         onClick = {
-                            viewModel.setLibrarySearchQuery("")
-                            viewModel.setCategoryFilter(null)
-                            viewModel.setStatusFilter(null)
+                            viewModel.clearFilters()
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = GraphiteSurfaceVariant)
                     ) {
@@ -399,6 +426,9 @@ fun LibraryScreen(
                             } else {
                                 viewModel.advanceEpisode(title, 1)
                             }
+                        },
+                        onToggleIgnore = {
+                            viewModel.toggleIgnoreTitle(title)
                         }
                     )
                 }

@@ -19,7 +19,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AccessTime
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
@@ -78,6 +80,7 @@ fun TitleDetailDialog(
     onUpdateStatus: (WatchStatus) -> Unit,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
+    onToggleIgnore: () -> Unit = {},
     onCheckUpdates: () -> Unit = {}
 ) {
     var showDeleteConfirm by remember { mutableStateOf(false) }
@@ -121,6 +124,13 @@ fun TitleDetailDialog(
                         }
 
                         Row(verticalAlignment = Alignment.CenterVertically) {
+                            IconButton(onClick = onToggleIgnore) {
+                                Icon(
+                                    imageVector = Icons.Default.Block,
+                                    contentDescription = if (title.isIgnored) "Desbloquear da Roleta" else "Ignorar na Roleta",
+                                    tint = if (title.isIgnored) Color(0xFFEF4444) else TextSecondary
+                                )
+                            }
                             if (!title.isMovie) {
                                 IconButton(onClick = onCheckUpdates) {
                                     Icon(
@@ -202,6 +212,33 @@ fun TitleDetailDialog(
                                 fontSize = 12.sp
                             )
 
+                            if (title.isMovie && title.duration.isNotBlank()) {
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        imageVector = Icons.Default.AccessTime,
+                                        contentDescription = null,
+                                        tint = NeonCyan,
+                                        modifier = Modifier.size(13.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(
+                                        text = "Duração: ${title.duration}",
+                                        color = NeonCyan,
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                }
+                            } else if (!title.isMovie) {
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = "${title.totalSeasons} temporada(s) • ${title.totalEpisodes} episódios",
+                                    color = NeonCyan,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            }
+
                             if (title.personalRating > 0f) {
                                 Spacer(modifier = Modifier.height(8.dp))
                                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -223,6 +260,32 @@ fun TitleDetailDialog(
 
                             Spacer(modifier = Modifier.height(10.dp))
                             StatusBadge(status = title.statusEnum)
+
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(if (title.isIgnored) Color(0xFFEF4444).copy(alpha = 0.2f) else GraphiteSurfaceVariant)
+                                    .border(1.dp, if (title.isIgnored) Color(0xFFEF4444) else GraphiteBorder, RoundedCornerShape(8.dp))
+                                    .clickable { onToggleIgnore() }
+                                    .padding(horizontal = 8.dp, vertical = 5.dp)
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        imageVector = Icons.Default.Block,
+                                        contentDescription = null,
+                                        tint = if (title.isIgnored) Color(0xFFEF4444) else NeonCyan,
+                                        modifier = Modifier.size(13.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(5.dp))
+                                    Text(
+                                        text = if (title.isIgnored) "BLOQUEADO NA ROLETA (Toque p/ desbloquear)" else "Ativo na Roleta (Toque p/ bloquear)",
+                                        color = if (title.isIgnored) Color(0xFFEF4444) else TextSecondary,
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
                         }
                     }
 
@@ -260,7 +323,21 @@ fun TitleDetailDialog(
                             )
 
                             Text(
-                                text = title.progressDisplay,
+                                text = if (title.isMovie) {
+                                    if (title.duration.isNotBlank()) {
+                                        if (title.statusEnum == WatchStatus.COMPLETO)
+                                            "Filme concluído • Duração: ${title.duration}"
+                                        else
+                                            "Filme • Duração: ${title.duration}"
+                                    } else {
+                                        if (title.statusEnum == WatchStatus.COMPLETO)
+                                            "Filme concluído"
+                                        else
+                                            "Filme"
+                                    }
+                                } else {
+                                    title.progressDisplay
+                                },
                                 color = TextPrimary,
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.Bold
@@ -286,11 +363,12 @@ fun TitleDetailDialog(
                                     Spacer(modifier = Modifier.width(8.dp))
                                     Text(
                                         text = if (title.statusEnum == WatchStatus.COMPLETO)
-                                            "Marcar como Não Assistido"
+                                            "Desmarcar Concluído"
                                         else
-                                            "Marcar como Assistido",
+                                            "Concluir Filme",
                                         color = Color.White,
-                                        fontSize = 13.sp
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.Bold
                                     )
                                 }
                             } else {
@@ -354,10 +432,10 @@ fun TitleDetailDialog(
 
                     Spacer(modifier = Modifier.height(14.dp))
 
-                    // Change Status Selector
-                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    // Novo Catálogo: Bloquear, Concluir, Ignorar (assistir e na fila removidos)
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text(
-                            text = "ALTERAR STATUS",
+                            text = "NOVO CATÁLOGO",
                             color = TextSecondary,
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
@@ -366,32 +444,88 @@ fun TitleDetailDialog(
 
                         Row(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            WatchStatus.entries.forEach { status ->
-                                val isSelected = title.statusEnum == status
-                                Box(
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .clip(RoundedCornerShape(8.dp))
-                                        .background(
-                                            if (isSelected) status.color.copy(alpha = 0.25f) else GraphiteSurface
-                                        )
-                                        .border(
-                                            1.dp,
-                                            if (isSelected) status.color else GraphiteBorder,
-                                            RoundedCornerShape(8.dp)
-                                        )
-                                        .clickable { onUpdateStatus(status) }
-                                        .padding(vertical = 8.dp),
-                                    contentAlignment = Alignment.Center
-                                ) {
+                            // 1. Bloquear
+                            val isBlocked = title.statusEnum == WatchStatus.BLOQUEADO
+                            Button(
+                                onClick = { onUpdateStatus(WatchStatus.BLOQUEADO) },
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(42.dp),
+                                shape = RoundedCornerShape(10.dp),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = if (isBlocked) WatchStatus.BLOQUEADO.color else GraphiteSurfaceVariant
+                                ),
+                                border = androidx.compose.foundation.BorderStroke(
+                                    1.dp,
+                                    if (isBlocked) WatchStatus.BLOQUEADO.color else GraphiteBorder
+                                ),
+                                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 4.dp, vertical = 2.dp)
+                            ) {
+                                Text(
+                                    text = "Bloquear",
+                                    color = if (isBlocked) Color.White else TextPrimary,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+
+                            // 2. Concluir
+                            val isCompleted = title.statusEnum == WatchStatus.COMPLETO
+                            Button(
+                                onClick = { onUpdateStatus(WatchStatus.COMPLETO) },
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(42.dp),
+                                shape = RoundedCornerShape(10.dp),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = if (isCompleted) WatchStatus.COMPLETO.color else GraphiteSurfaceVariant
+                                ),
+                                border = androidx.compose.foundation.BorderStroke(
+                                    1.dp,
+                                    if (isCompleted) WatchStatus.COMPLETO.color else GraphiteBorder
+                                ),
+                                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 4.dp, vertical = 2.dp)
+                            ) {
+                                Text(
+                                    text = "Concluir",
+                                    color = if (isCompleted) Color.White else TextPrimary,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+
+                            // 3. Ignorar
+                            val isIgnored = title.isIgnored
+                            Button(
+                                onClick = onToggleIgnore,
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(42.dp),
+                                shape = RoundedCornerShape(10.dp),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = if (isIgnored) Color(0xFFEF4444) else GraphiteSurfaceVariant
+                                ),
+                                border = androidx.compose.foundation.BorderStroke(
+                                    1.dp,
+                                    if (isIgnored) Color(0xFFEF4444) else GraphiteBorder
+                                ),
+                                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 4.dp, vertical = 2.dp)
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        imageVector = Icons.Default.Block,
+                                        contentDescription = null,
+                                        tint = if (isIgnored) Color.White else Color(0xFFEF4444),
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
                                     Text(
-                                        text = status.shortLabel,
-                                        color = if (isSelected) status.color else TextSecondary,
-                                        fontSize = 10.sp,
-                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                        maxLines = 1
+                                        text = if (isIgnored) "Ignorado" else "Ignorar",
+                                        color = if (isIgnored) Color.White else Color(0xFFEF4444),
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold
                                     )
                                 }
                             }

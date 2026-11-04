@@ -6,6 +6,13 @@ import com.example.data.model.TitleEntity
 import com.example.data.model.WatchStatus
 import com.example.data.remote.TitleSearchResult
 import com.example.data.remote.TitleSearchService
+import java.io.BufferedInputStream
+import java.io.BufferedOutputStream
+import java.io.InputStream
+import java.io.OutputStream
+import java.util.zip.ZipEntry
+import java.util.zip.ZipInputStream
+import java.util.zip.ZipOutputStream
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
@@ -47,9 +54,41 @@ class TitleRepository(
         val current = titleDao.getTitleById(id).first() ?: return@withContext
         if (current.isMovie) return@withContext
 
-        val newEp = (current.currentEpisode + delta).coerceIn(0, current.totalEpisodes.coerceAtLeast(1))
+        val epsPerSeason = current.effectiveEpisodesPerSeason
+        var newSeason = current.currentSeason
+        var newEp = current.currentEpisode + delta
+
+        if (delta > 0 && newEp > epsPerSeason && newSeason < current.totalSeasons) {
+            newSeason += 1
+            newEp = 1
+        } else if (delta < 0 && newEp < 0 && newSeason > 1) {
+            newSeason -= 1
+            newEp = epsPerSeason
+        } else {
+            val maxAllowed = if (current.totalSeasons <= 1) current.totalEpisodes.coerceAtLeast(1) else epsPerSeason
+            newEp = newEp.coerceIn(0, maxAllowed)
+        }
+
+        val totalWatched = ((newSeason - 1).coerceAtLeast(0) * epsPerSeason + newEp)
+        val newStatus = if (current.totalEpisodes > 0 && totalWatched >= current.totalEpisodes) {
+            WatchStatus.COMPLETO.name
+        } else if (totalWatched > 0 && current.status == WatchStatus.PENDENTE.name) {
+            WatchStatus.EM_ANDAMENTO.name
+        } else {
+            current.status
+        }
+
+        val newCompletedAt = if (newStatus == WatchStatus.COMPLETO.name) {
+            current.completedAt ?: System.currentTimeMillis()
+        } else {
+            null
+        }
+
         val updated = current.copy(
+            currentSeason = newSeason,
             currentEpisode = newEp,
+            status = newStatus,
+            completedAt = newCompletedAt,
             lastWatchedAt = System.currentTimeMillis(),
             updatedAt = System.currentTimeMillis()
         )
@@ -60,17 +99,28 @@ class TitleRepository(
         val current = titleDao.getTitleById(id).first() ?: return@withContext
         if (!current.isMovie) return@withContext
 
-        val newStatus = if (current.statusEnum == WatchStatus.COMPLETO) {
-            WatchStatus.PENDENTE.name
-        } else {
-            WatchStatus.COMPLETO.name
-        }
+        val isNowCompleted = current.statusEnum != WatchStatus.COMPLETO
+        val newStatus = if (isNowCompleted) WatchStatus.COMPLETO.name else WatchStatus.PENDENTE.name
+        val newCompletedAt = if (isNowCompleted) (current.completedAt ?: System.currentTimeMillis()) else null
+
         val updated = current.copy(
             status = newStatus,
+            completedAt = newCompletedAt,
             lastWatchedAt = System.currentTimeMillis(),
             updatedAt = System.currentTimeMillis()
         )
         titleDao.update(updated)
+    }
+
+    suspend fun toggleIgnored(id: Long): Boolean = withContext(Dispatchers.IO) {
+        val current = titleDao.getTitleById(id).first() ?: return@withContext false
+        val newIgnored = !current.isIgnored
+        titleDao.updateIgnored(id, newIgnored)
+        newIgnored
+    }
+
+    suspend fun setIgnored(id: Long, ignored: Boolean) = withContext(Dispatchers.IO) {
+        titleDao.updateIgnored(id, ignored)
     }
 
     suspend fun searchOnline(query: String, category: Category?): List<TitleSearchResult> {
@@ -110,11 +160,12 @@ class TitleRepository(
                 category = Category.FILME.name,
                 releaseYear = 2014,
                 genre = "Ficção Científica, Drama, Aventura",
-                totalSeasons = 1,
-                episodesPerSeason = 1,
-                currentSeason = 1,
-                currentEpisode = 1,
-                totalEpisodes = 1,
+                totalSeasons = 0,
+                episodesPerSeason = 0,
+                currentSeason = 0,
+                currentEpisode = 0,
+                totalEpisodes = 0,
+                duration = "2h 49m",
                 status = WatchStatus.COMPLETO.name,
                 personalRating = 10.0f,
                 notes = "Trilha sonora fantástica de Hans Zimmer. Filme favorito da vida.",
@@ -178,11 +229,12 @@ class TitleRepository(
                 category = Category.FILME.name,
                 releaseYear = 2024,
                 genre = "Ficção Científica, Aventura",
-                totalSeasons = 1,
-                episodesPerSeason = 1,
-                currentSeason = 1,
+                totalSeasons = 0,
+                episodesPerSeason = 0,
+                currentSeason = 0,
                 currentEpisode = 0,
-                totalEpisodes = 1,
+                totalEpisodes = 0,
+                duration = "2h 46m",
                 status = WatchStatus.PENDENTE.name,
                 personalRating = 0.0f,
                 notes = "Adicionado à fila para assistir no fim de semana.",
@@ -194,20 +246,29 @@ class TitleRepository(
 
     private fun applyStatusAutomation(title: TitleEntity): TitleEntity {
         if (title.isMovie) {
-            return title
+            val completedAt = if (title.statusEnum == WatchStatus.COMPLETO) {
+                title.completedAt ?: System.currentTimeMillis()
+            } else {
+                null
+            }
+            return title.copy(completedAt = completedAt)
         }
 
         var newStatus = title.status
-        // Auto complete if current episode reaches total
-        if (title.totalEpisodes > 0 && title.currentEpisode >= title.totalEpisodes) {
+        var newCompletedAt = title.completedAt
+        val totalWatched = title.totalWatchedEpisodes
+        // Auto complete if total watched episodes reaches total
+        if (title.totalEpisodes > 0 && totalWatched >= title.totalEpisodes) {
             newStatus = WatchStatus.COMPLETO.name
-        } else if (title.currentEpisode > 0 && title.status == WatchStatus.PENDENTE.name) {
+            if (newCompletedAt == null) newCompletedAt = System.currentTimeMillis()
+        } else if (totalWatched > 0 && title.status == WatchStatus.PENDENTE.name) {
             newStatus = WatchStatus.EM_ANDAMENTO.name
-        } else if (title.currentEpisode < title.totalEpisodes && title.status == WatchStatus.COMPLETO.name) {
+        } else if (totalWatched < title.totalEpisodes && title.status == WatchStatus.COMPLETO.name) {
             newStatus = WatchStatus.EM_ANDAMENTO.name
+            newCompletedAt = null
         }
 
-        return title.copy(status = newStatus)
+        return title.copy(status = newStatus, completedAt = newCompletedAt)
     }
 
     fun exportToJson(titles: List<TitleEntity>): String {
@@ -226,6 +287,11 @@ class TitleRepository(
             obj.put("currentSeason", item.currentSeason)
             obj.put("currentEpisode", item.currentEpisode)
             obj.put("totalEpisodes", item.totalEpisodes)
+            obj.put("duration", item.duration)
+            obj.put("isIgnored", item.isIgnored)
+            if (item.completedAt != null) {
+                obj.put("completedAt", item.completedAt)
+            }
             obj.put("status", item.status)
             obj.put("personalRating", item.personalRating.toDouble())
             obj.put("notes", item.notes)
@@ -241,6 +307,46 @@ class TitleRepository(
         return root.toString(2)
     }
 
+    fun exportToZip(titles: List<TitleEntity>, outputStream: OutputStream) {
+        val jsonStr = exportToJson(titles)
+        ZipOutputStream(BufferedOutputStream(outputStream)).use { zipOut ->
+            val entry = ZipEntry("vortex_backup.json")
+            zipOut.putNextEntry(entry)
+            zipOut.write(jsonStr.toByteArray(Charsets.UTF_8))
+            zipOut.closeEntry()
+            zipOut.flush()
+        }
+    }
+
+    fun readBackupStream(inputStream: InputStream): String {
+        val buffered = BufferedInputStream(inputStream)
+        buffered.mark(1024)
+        val header = ByteArray(4)
+        val bytesRead = buffered.read(header, 0, 4)
+        buffered.reset()
+
+        val isZip = bytesRead == 4 &&
+                header[0] == 0x50.toByte() &&
+                header[1] == 0x4B.toByte() &&
+                header[2] == 0x03.toByte() &&
+                header[3] == 0x04.toByte()
+
+        return if (isZip) {
+            ZipInputStream(buffered).use { zipIn ->
+                var entry = zipIn.nextEntry
+                while (entry != null) {
+                    if (!entry.isDirectory && (entry.name.endsWith(".json", ignoreCase = true) || entry.name.contains("vortex", ignoreCase = true))) {
+                        return@use zipIn.bufferedReader(Charsets.UTF_8).readText()
+                    }
+                    entry = zipIn.nextEntry
+                }
+                throw IllegalArgumentException("Arquivo ZIP válido, mas nenhum arquivo JSON foi encontrado.")
+            }
+        } else {
+            buffered.bufferedReader(Charsets.UTF_8).readText()
+        }
+    }
+
     suspend fun importFromJson(jsonStr: String): Int = withContext(Dispatchers.IO) {
         val root = JSONObject(jsonStr)
         val array = root.optJSONArray("titles") ?: JSONArray(jsonStr)
@@ -248,19 +354,33 @@ class TitleRepository(
 
         for (i in 0 until array.length()) {
             val obj = array.getJSONObject(i)
+            val categoryStr = obj.optString("category", Category.FILME.name)
+            val isMovie = categoryStr.equals(Category.FILME.name, ignoreCase = true) || categoryStr.equals("Filme", ignoreCase = true)
+            val statusStr = obj.optString("status", WatchStatus.PENDENTE.name)
+            val parsedCompletedAt = if (obj.has("completedAt") && !obj.isNull("completedAt")) {
+                obj.optLong("completedAt")
+            } else if (statusStr.equals(WatchStatus.COMPLETO.name, ignoreCase = true) || statusStr.equals("Concluído", ignoreCase = true)) {
+                System.currentTimeMillis()
+            } else {
+                null
+            }
+
             val entity = TitleEntity(
                 name = obj.optString("name", "Sem Nome"),
                 coverUrl = obj.optString("coverUrl", ""),
                 synopsis = obj.optString("synopsis", ""),
-                category = obj.optString("category", Category.FILME.name),
+                category = categoryStr,
                 releaseYear = obj.optInt("releaseYear", 2024),
                 genre = obj.optString("genre", "Geral"),
-                totalSeasons = obj.optInt("totalSeasons", 1),
-                episodesPerSeason = obj.optInt("episodesPerSeason", 1),
-                currentSeason = obj.optInt("currentSeason", 1),
-                currentEpisode = obj.optInt("currentEpisode", 0),
-                totalEpisodes = obj.optInt("totalEpisodes", 1),
-                status = obj.optString("status", WatchStatus.PENDENTE.name),
+                totalSeasons = if (isMovie) 0 else obj.optInt("totalSeasons", 1),
+                episodesPerSeason = if (isMovie) 0 else obj.optInt("episodesPerSeason", 1),
+                currentSeason = if (isMovie) 0 else obj.optInt("currentSeason", 1),
+                currentEpisode = if (isMovie) 0 else obj.optInt("currentEpisode", 0),
+                totalEpisodes = if (isMovie) 0 else obj.optInt("totalEpisodes", 1),
+                duration = obj.optString("duration", ""),
+                isIgnored = obj.optBoolean("isIgnored", false),
+                completedAt = parsedCompletedAt,
+                status = statusStr,
                 personalRating = obj.optDouble("personalRating", 0.0).toFloat(),
                 notes = obj.optString("notes", ""),
                 createdAt = obj.optLong("createdAt", System.currentTimeMillis()),
