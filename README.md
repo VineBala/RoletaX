@@ -1,4 +1,4 @@
-# Vortex v2.0
+# Vortex v2.1
 > **Biblioteca Inteligente de Entretenimento & Roleta Aleatória**  
 > **Desenvolvido e Assinado por VineBalla**
 
