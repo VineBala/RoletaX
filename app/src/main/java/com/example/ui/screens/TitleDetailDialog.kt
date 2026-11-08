@@ -447,10 +447,13 @@ fun TitleDetailDialog(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            // 1. Bloquear
+                            // 1. Bloquear / Desbloquear
                             val isBlocked = title.statusEnum == WatchStatus.BLOQUEADO
                             Button(
-                                onClick = { onUpdateStatus(WatchStatus.BLOQUEADO) },
+                                onClick = {
+                                    val nextStatus = if (isBlocked) WatchStatus.PENDENTE else WatchStatus.BLOQUEADO
+                                    onUpdateStatus(nextStatus)
+                                },
                                 modifier = Modifier
                                     .weight(1f)
                                     .height(42.dp),
@@ -465,7 +468,7 @@ fun TitleDetailDialog(
                                 contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 4.dp, vertical = 2.dp)
                             ) {
                                 Text(
-                                    text = "Bloquear",
+                                    text = if (isBlocked) "Desbloquear" else "Bloquear",
                                     color = if (isBlocked) Color.White else TextPrimary,
                                     fontSize = 12.sp,
                                     fontWeight = FontWeight.Bold

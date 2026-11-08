@@ -4,6 +4,7 @@ import android.app.Application
 import android.content.ContentValues
 import android.content.Context
 import android.media.MediaScannerConnection
+import android.net.Uri
 import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
@@ -92,6 +93,11 @@ class SeraAkisosViewModel(application: Application) : AndroidViewModel(applicati
     val hasSeenWelcome: StateFlow<Boolean> = _hasSeenWelcome.asStateFlow()
 
     private val _activeWinnerId = MutableStateFlow<Long?>(null)
+    private val _isManualSelection = MutableStateFlow<Boolean>(false)
+    val isManualSelection: StateFlow<Boolean> = _isManualSelection.asStateFlow()
+
+    private val _rouletteDrawnCycleIds = MutableStateFlow<Set<Long>>(emptySet())
+    val rouletteDrawnCycleIds: StateFlow<Set<Long>> = _rouletteDrawnCycleIds.asStateFlow()
 
     init {
         val database = AppDatabase.getDatabase(application)
@@ -102,6 +108,15 @@ class SeraAkisosViewModel(application: Application) : AndroidViewModel(applicati
         val savedWinnerId = roulettePrefs.getLong("active_roulette_winner_id", -1L)
         if (savedWinnerId > 0) {
             _activeWinnerId.value = savedWinnerId
+        }
+        _isManualSelection.value = roulettePrefs.getBoolean("active_roulette_is_manual", false)
+
+        val savedCycleString = roulettePrefs.getString("roulette_cycle_ids", "") ?: ""
+        if (savedCycleString.isNotBlank()) {
+            val ids = savedCycleString.split(",")
+                .mapNotNull { it.trim().toLongOrNull() }
+                .toSet()
+            _rouletteDrawnCycleIds.value = ids
         }
     }
 
@@ -429,6 +444,24 @@ class SeraAkisosViewModel(application: Application) : AndroidViewModel(applicati
         }
     }
 
+    fun toggleBlockTitle(title: TitleEntity) {
+        viewModelScope.launch {
+            val isNowBlocked = repository.toggleBlocked(title.id)
+            val updated = title.copy(
+                status = if (isNowBlocked) WatchStatus.BLOQUEADO.name else WatchStatus.PENDENTE.name,
+                updatedAt = System.currentTimeMillis()
+            )
+            if (_selectedTitle.value?.id == title.id) {
+                _selectedTitle.value = updated
+            }
+            if (isNowBlocked) {
+                showMessage("Título '${title.name}' bloqueado! (Atualizações e notificações suspensas)")
+            } else {
+                showMessage("Título '${title.name}' desbloqueado com sucesso.")
+            }
+        }
+    }
+
     fun toggleMovieWatched(title: TitleEntity) {
         toggleTitleCompleted(title)
     }
@@ -661,7 +694,42 @@ class SeraAkisosViewModel(application: Application) : AndroidViewModel(applicati
         _activeWinnerId.value = null
         _rouletteWinner.value = null
         _showRouletteResult.value = false
-        roulettePrefs.edit().remove("active_roulette_winner_id").apply()
+        _isManualSelection.value = false
+        roulettePrefs.edit()
+            .remove("active_roulette_winner_id")
+            .putBoolean("active_roulette_is_manual", false)
+            .apply()
+    }
+
+    private fun persistCycleIds(cycle: Set<Long>) {
+        _rouletteDrawnCycleIds.value = cycle
+        roulettePrefs.edit().putString("roulette_cycle_ids", cycle.joinToString(",")).apply()
+    }
+
+    fun resetRouletteCycle() {
+        persistCycleIds(emptySet())
+        showMessage("Ciclo da roleta reiniciado! Todos os títulos estão disponíveis novamente.")
+    }
+
+    fun selectManualTitle(title: TitleEntity, autoShowFullResult: Boolean = false) {
+        val currentCycle = _rouletteDrawnCycleIds.value.toMutableSet()
+        currentCycle.add(title.id)
+        persistCycleIds(currentCycle)
+
+        _lastWinnerId.value = title.id
+        _rouletteWinner.value = title
+        _activeWinnerId.value = title.id
+        _isManualSelection.value = true
+
+        roulettePrefs.edit()
+            .putLong("active_roulette_winner_id", title.id)
+            .putBoolean("active_roulette_is_manual", true)
+            .apply()
+
+        if (autoShowFullResult) {
+            _showRouletteResult.value = true
+        }
+        showMessage("Título '${title.name}' selecionado manualmente para a roleta!")
     }
 
     // Calculates eligible titles for the roulette based on current mode and filters
@@ -703,9 +771,22 @@ class SeraAkisosViewModel(application: Application) : AndroidViewModel(applicati
             return null
         }
 
-        var candidatePool = eligible
-        if (_rouletteAvoidLastResult.value && eligible.size > 1 && _lastWinnerId.value != null) {
-            val filtered = eligible.filter { it.id != _lastWinnerId.value }
+        val eligibleIds = eligible.map { it.id }.toSet()
+        var currentCycle = _rouletteDrawnCycleIds.value.intersect(eligibleIds).toMutableSet()
+
+        // Títulos elegíveis ainda não sorteados nem selecionados neste ciclo
+        var notYetDrawnInCycle = eligible.filter { !currentCycle.contains(it.id) }
+
+        // Se todos os títulos elegíveis já foram sorteados/selecionados, reinicia o ciclo
+        if (notYetDrawnInCycle.isEmpty()) {
+            currentCycle.clear()
+            persistCycleIds(emptySet())
+            notYetDrawnInCycle = eligible
+        }
+
+        var candidatePool = notYetDrawnInCycle
+        if (_rouletteAvoidLastResult.value && candidatePool.size > 1 && _lastWinnerId.value != null) {
+            val filtered = candidatePool.filter { it.id != _lastWinnerId.value }
             if (filtered.isNotEmpty()) {
                 candidatePool = filtered
             }
@@ -713,10 +794,20 @@ class SeraAkisosViewModel(application: Application) : AndroidViewModel(applicati
 
         val randomIndex = Random.nextInt(candidatePool.size)
         val winner = candidatePool[randomIndex]
+
+        currentCycle.add(winner.id)
+        persistCycleIds(currentCycle)
+
         _lastWinnerId.value = winner.id
         _rouletteWinner.value = winner
         _activeWinnerId.value = winner.id
-        roulettePrefs.edit().putLong("active_roulette_winner_id", winner.id).apply()
+        _isManualSelection.value = false
+
+        roulettePrefs.edit()
+            .putLong("active_roulette_winner_id", winner.id)
+            .putBoolean("active_roulette_is_manual", false)
+            .apply()
+
         _isSpinning.value = false
         if (autoShowFullResult) {
             _showRouletteResult.value = true
@@ -819,6 +910,26 @@ class SeraAkisosViewModel(application: Application) : AndroidViewModel(applicati
             showMessage("Backup .zip exportado com sucesso!")
         } catch (e: Exception) {
             showMessage("Erro ao exportar backup .zip.")
+        }
+    }
+
+    fun importBackupFromUri(context: Context, uri: Uri, onComplete: ((Boolean, Int) -> Unit)? = null) {
+        viewModelScope.launch {
+            try {
+                val json = withContext(Dispatchers.IO) {
+                    val stream = context.contentResolver.openInputStream(uri)
+                        ?: throw java.io.IOException("Não foi possível abrir o arquivo selecionado.")
+                    stream.use { s ->
+                        repository.readBackupStream(s)
+                    }
+                }
+                val count = repository.importFromJson(json)
+                onComplete?.invoke(true, count)
+                showMessage("$count títulos restaurados com sucesso do backup .zip!")
+            } catch (e: Exception) {
+                onComplete?.invoke(false, 0)
+                showMessage("Erro ao ler backup: ${e.message ?: "arquivo inválido"}")
+            }
         }
     }
 
@@ -945,9 +1056,9 @@ class SeraAkisosViewModel(application: Application) : AndroidViewModel(applicati
 
     fun simulateUpdateForTesting() {
         viewModelScope.launch {
-            val list = allTitles.value.filter { !it.isMovie }
+            val list = allTitles.value.filter { !it.isMovie && it.statusEnum != WatchStatus.BLOQUEADO }
             if (list.isEmpty()) {
-                showMessage("Adicione ao menos uma série ou anime para testar a notificação!")
+                showMessage("Adicione ao menos uma série ou anime ativa para testar a notificação!")
                 return@launch
             }
             val target = list.first()

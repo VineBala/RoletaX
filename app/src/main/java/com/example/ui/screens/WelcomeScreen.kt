@@ -78,17 +78,9 @@ fun WelcomeScreen(
         contract = ActivityResultContracts.OpenDocument()
     ) { uri: Uri? ->
         if (uri != null) {
-            coroutineScope.launch {
-                try {
-                    context.contentResolver.openInputStream(uri)?.use { stream ->
-                        viewModel.importBackupStream(stream) { success: Boolean, count: Int ->
-                            if (success && count > 0) {
-                                onDismiss()
-                            }
-                        }
-                    }
-                } catch (e: Exception) {
-                    viewModel.showMessage("Erro ao ler arquivo: ${e.message}")
+            viewModel.importBackupFromUri(context, uri) { success, count ->
+                if (success && count > 0) {
+                    onDismiss()
                 }
             }
         }
@@ -145,7 +137,7 @@ fun WelcomeScreen(
                 )
 
                 Text(
-                    text = "Versão 2.0 • Roleta Interativa & Gestão de Títulos",
+                    text = "Versão ${com.example.BuildConfig.VERSION_NAME} • Roleta Interativa & Gestão de Títulos",
                     color = NeonCyan,
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Bold,

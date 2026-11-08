@@ -8,6 +8,8 @@ import com.example.data.remote.TitleSearchResult
 import com.example.data.remote.TitleSearchService
 import java.io.BufferedInputStream
 import java.io.BufferedOutputStream
+import java.io.ByteArrayInputStream
+import java.io.ByteArrayOutputStream
 import java.io.InputStream
 import java.io.OutputStream
 import java.util.zip.ZipEntry
@@ -136,6 +138,18 @@ class TitleRepository(
         val newIgnored = !current.isIgnored
         titleDao.updateIgnored(id, newIgnored)
         newIgnored
+    }
+
+    suspend fun toggleBlocked(id: Long): Boolean = withContext(Dispatchers.IO) {
+        val current = titleDao.getTitleById(id).first() ?: return@withContext false
+        val isBlocked = current.statusEnum == WatchStatus.BLOQUEADO
+        val newStatus = if (isBlocked) WatchStatus.PENDENTE else WatchStatus.BLOQUEADO
+        val updated = current.copy(
+            status = newStatus.name,
+            updatedAt = System.currentTimeMillis()
+        )
+        titleDao.update(updated)
+        !isBlocked
     }
 
     suspend fun setIgnored(id: Long, ignored: Boolean) = withContext(Dispatchers.IO) {
@@ -341,31 +355,36 @@ class TitleRepository(
     }
 
     fun readBackupStream(inputStream: InputStream): String {
-        val buffered = BufferedInputStream(inputStream)
-        buffered.mark(1024)
-        val header = ByteArray(4)
-        val bytesRead = buffered.read(header, 0, 4)
-        buffered.reset()
+        val bytes = inputStream.readBytes()
+        if (bytes.size < 4) {
+            throw IllegalArgumentException("Arquivo de backup vazio ou inválido.")
+        }
 
-        val isZip = bytesRead == 4 &&
-                header[0] == 0x50.toByte() &&
-                header[1] == 0x4B.toByte() &&
-                header[2] == 0x03.toByte() &&
-                header[3] == 0x04.toByte()
+        val isZip = bytes[0] == 0x50.toByte() &&
+                bytes[1] == 0x4B.toByte() &&
+                bytes[2] == 0x03.toByte() &&
+                bytes[3] == 0x04.toByte()
 
         return if (isZip) {
-            ZipInputStream(buffered).use { zipIn ->
+            ZipInputStream(ByteArrayInputStream(bytes)).use { zipIn ->
                 var entry = zipIn.nextEntry
                 while (entry != null) {
-                    if (!entry.isDirectory && (entry.name.endsWith(".json", ignoreCase = true) || entry.name.contains("vortex", ignoreCase = true))) {
-                        return@use zipIn.bufferedReader(Charsets.UTF_8).readText()
+                    if (!entry.isDirectory && (entry.name.endsWith(".json", ignoreCase = true) || entry.name.contains("vortex", ignoreCase = true) || entry.name.contains("backup", ignoreCase = true))) {
+                        val out = ByteArrayOutputStream()
+                        val buffer = ByteArray(4096)
+                        var len: Int
+                        while (zipIn.read(buffer).also { len = it } > 0) {
+                            out.write(buffer, 0, len)
+                        }
+                        return@use out.toString(Charsets.UTF_8.name())
                     }
+                    zipIn.closeEntry()
                     entry = zipIn.nextEntry
                 }
                 throw IllegalArgumentException("Arquivo ZIP válido, mas nenhum arquivo JSON foi encontrado.")
             }
         } else {
-            buffered.bufferedReader(Charsets.UTF_8).readText()
+            bytes.toString(Charsets.UTF_8)
         }
     }
 
@@ -423,7 +442,7 @@ class TitleRepository(
         val titles = titleDao.getAllTitles().first()
         val updateResults = mutableListOf<com.example.data.model.UpdateResult>()
 
-        val eligibleForUpdate = titles.filter { !it.isMovie }
+        val eligibleForUpdate = titles.filter { !it.isMovie && it.statusEnum != WatchStatus.BLOQUEADO }
         val totalCount = eligibleForUpdate.size
 
         eligibleForUpdate.forEachIndexed { index, title ->
@@ -456,6 +475,7 @@ class TitleRepository(
 
     suspend fun checkSingleTitleUpdate(titleId: Long): com.example.data.model.UpdateResult? = withContext(Dispatchers.IO) {
         val title = titleDao.getTitleById(titleId).first() ?: return@withContext null
+        if (title.statusEnum == WatchStatus.BLOQUEADO) return@withContext null
         val info = searchService.checkTitleForUpdates(title)
         if (info.hasUpdates) {
             val updated = title.copy(

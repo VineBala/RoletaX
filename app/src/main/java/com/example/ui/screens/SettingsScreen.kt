@@ -126,17 +126,9 @@ fun SettingsScreen(
         contract = ActivityResultContracts.OpenDocument()
     ) { uri ->
         if (uri != null) {
-            coroutineScope.launch {
-                try {
-                    context.contentResolver.openInputStream(uri)?.use { stream ->
-                        viewModel.importBackupStream(stream) { success, count ->
-                            if (success) {
-                                viewModel.showMessage("$count títulos restaurados com sucesso do backup .zip!")
-                            }
-                        }
-                    }
-                } catch (e: Exception) {
-                    viewModel.showMessage("Erro ao restaurar arquivo .zip: ${e.message}")
+            viewModel.importBackupFromUri(context, uri) { success, count ->
+                if (success) {
+                    viewModel.showMessage("$count títulos restaurados com sucesso do backup .zip!")
                 }
             }
         }
@@ -503,7 +495,7 @@ fun SettingsScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "Versão 2.0",
+                            text = "Versão ${com.example.BuildConfig.VERSION_NAME}",
                             color = NeonCyan,
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold
@@ -577,7 +569,7 @@ fun SettingsScreen(
                             .padding(8.dp)
                     ) {
                         Text(
-                            text = "Versão 2.1 (Vortex) • Assinado por VineBalla",
+                            text = "Versão ${com.example.BuildConfig.VERSION_NAME} (Vortex) • Assinado por VineBalla",
                             color = NeonCyan,
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold

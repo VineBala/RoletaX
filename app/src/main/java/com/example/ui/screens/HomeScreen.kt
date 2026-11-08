@@ -139,7 +139,7 @@ fun HomeScreen(
                             )
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
-                                text = "v2.0",
+                                text = "v${com.example.BuildConfig.VERSION_NAME}",
                                 color = NeonPurple,
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold

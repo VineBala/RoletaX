@@ -6,6 +6,8 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.media.AudioAttributes
+import android.media.RingtoneManager
 import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
@@ -20,6 +22,12 @@ object NotificationHelper {
 
     fun createNotificationChannel(context: Context) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val soundUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
+            val audioAttributes = AudioAttributes.Builder()
+                .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                .setUsage(AudioAttributes.USAGE_NOTIFICATION)
+                .build()
+
             val channel = NotificationChannel(
                 CHANNEL_ID,
                 CHANNEL_NAME,
@@ -29,6 +37,7 @@ object NotificationHelper {
                 enableLights(true)
                 lightColor = android.graphics.Color.MAGENTA
                 enableVibration(true)
+                setSound(soundUri, audioAttributes)
             }
 
             val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
@@ -70,6 +79,8 @@ object NotificationHelper {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
+        val defaultSoundUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
+
         val builder = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_popup_sync)
             .setContentTitle("Vortex: Atualização!")
@@ -79,6 +90,8 @@ object NotificationHelper {
                     .bigText("Novidades sobre '$titleName':\n$message\nAbra o Vortex para acompanhar o novo episódio.")
             )
             .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setDefaults(NotificationCompat.DEFAULT_ALL)
+            .setSound(defaultSoundUri)
             .setColor(0xFFB026FF.toInt())
             .setAutoCancel(true)
             .setContentIntent(pendingIntent)

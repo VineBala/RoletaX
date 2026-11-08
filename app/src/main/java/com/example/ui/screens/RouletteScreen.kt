@@ -108,8 +108,26 @@ fun RouletteScreen(
 
     val activeRouletteTitle by viewModel.activeRouletteTitle.collectAsStateWithLifecycle()
     val showRouletteResult by viewModel.showRouletteResult.collectAsStateWithLifecycle()
+    val isManualSelection by viewModel.isManualSelection.collectAsStateWithLifecycle()
+    val cycleDrawnIds by viewModel.rouletteDrawnCycleIds.collectAsStateWithLifecycle()
+    val allTitles by viewModel.allTitles.collectAsStateWithLifecycle()
 
     val eligibleTitles = viewModel.getEligibleTitles()
+
+    var showManualSelectionDialog by remember { mutableStateOf(false) }
+
+    if (showManualSelectionDialog) {
+        ManualSelectionDialog(
+            titles = allTitles.filter { !it.isIgnored },
+            activeTitleId = activeRouletteTitle?.id,
+            cycleDrawnIds = cycleDrawnIds,
+            onSelect = { selected ->
+                viewModel.selectManualTitle(selected, autoShowFullResult = false)
+                showManualSelectionDialog = false
+            },
+            onDismiss = { showManualSelectionDialog = false }
+        )
+    }
 
     // NOVA INTERFACE DE RESULTADO DA ROLETA
     if (showRouletteResult && activeRouletteTitle != null) {
@@ -340,6 +358,7 @@ fun RouletteScreen(
         item {
             RouletteSpotlightCard(
                 title = activeRouletteTitle,
+                isManualSelection = isManualSelection,
                 eligibleCount = eligibleTitles.size,
                 onOpenDetails = { viewModel.setShowRouletteResult(true) },
                 onQuickAction = {
@@ -354,50 +373,100 @@ fun RouletteScreen(
             )
         }
 
-        // Indicador de títulos elegíveis
+        // Indicador de títulos elegíveis e ciclo
         item {
-            Text(
-                text = "${eligibleTitles.size} títulos elegíveis no sorteio atual",
-                color = if (eligibleTitles.isNotEmpty()) NeonCyan else Color(0xFFEF4444),
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Bold,
-                textAlign = TextAlign.Center
-            )
+            val drawnInCycleCount = eligibleTitles.count { cycleDrawnIds.contains(it.id) }
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Text(
+                    text = "${eligibleTitles.size} títulos elegíveis no sorteio atual",
+                    color = if (eligibleTitles.isNotEmpty()) NeonCyan else Color(0xFFEF4444),
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    textAlign = TextAlign.Center
+                )
+                if (eligibleTitles.isNotEmpty()) {
+                    Text(
+                        text = "Ciclo de repetição: $drawnInCycleCount/${eligibleTitles.size} títulos já participaram",
+                        color = TextSecondary,
+                        fontSize = 11.sp,
+                        textAlign = TextAlign.Center
+                    )
+                }
+            }
         }
 
-        // Primary Action: "SORTEAR TÍTULO" Button
+        // Primary Actions: "SORTEAR TÍTULO" and "SELEÇÃO MANUAL" Buttons
         item {
-            Button(
-                onClick = {
-                    viewModel.drawRouletteTitle()
-                },
-                enabled = eligibleTitles.isNotEmpty(),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(54.dp)
-                    .testTag("spin_roulette_button"),
-                shape = RoundedCornerShape(16.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = NeonPurple,
-                    disabledContainerColor = GraphiteSurfaceVariant
-                ),
-                elevation = ButtonDefaults.buttonElevation(defaultElevation = 8.dp)
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        imageVector = Icons.Default.Casino,
-                        contentDescription = null,
-                        tint = Color.White,
-                        modifier = Modifier.size(24.dp)
+                Button(
+                    onClick = {
+                        viewModel.drawRouletteTitle()
+                    },
+                    enabled = eligibleTitles.isNotEmpty(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(52.dp)
+                        .testTag("spin_roulette_button"),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = NeonPurple,
+                        disabledContainerColor = GraphiteSurfaceVariant
+                    ),
+                    elevation = ButtonDefaults.buttonElevation(defaultElevation = 8.dp)
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Default.Casino,
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(22.dp)
+                        )
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Text(
+                            text = if (activeRouletteTitle != null) "SORTEAR OUTRO TÍTULO" else "SORTEAR TÍTULO",
+                            color = Color.White,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Black,
+                            letterSpacing = 1.sp
+                        )
+                    }
+                }
+
+                // Botão de Seleção Manual
+                OutlinedButton(
+                    onClick = { showManualSelectionDialog = true },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(48.dp)
+                        .testTag("manual_selection_button"),
+                    shape = RoundedCornerShape(14.dp),
+                    border = androidx.compose.foundation.BorderStroke(1.5.dp, NeonCyan),
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        containerColor = NeonCyan.copy(alpha = 0.08f)
                     )
-                    Spacer(modifier = Modifier.width(10.dp))
-                    Text(
-                        text = if (activeRouletteTitle != null) "SORTEAR OUTRO TÍTULO" else "SORTEAR TÍTULO",
-                        color = Color.White,
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Black,
-                        letterSpacing = 1.sp
-                    )
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Default.FilterList,
+                            contentDescription = null,
+                            tint = NeonCyan,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "SELEÇÃO MANUAL",
+                            color = NeonCyan,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 0.5.sp
+                        )
+                    }
                 }
             }
         }
@@ -681,6 +750,7 @@ private val NeonPurpleDark = Color(0xFF7A14B8)
 @Composable
 private fun RouletteSpotlightCard(
     title: TitleEntity?,
+    isManualSelection: Boolean,
     eligibleCount: Int,
     onOpenDetails: () -> Unit,
     onQuickAction: () -> Unit,
@@ -718,20 +788,26 @@ private fun RouletteSpotlightCard(
                     Row(
                         modifier = Modifier
                             .clip(RoundedCornerShape(8.dp))
-                            .background(NeonPurple.copy(alpha = 0.2f))
-                            .border(1.dp, NeonPurple.copy(alpha = 0.6f), RoundedCornerShape(8.dp))
+                            .background(
+                                if (isManualSelection) NeonCyan.copy(alpha = 0.18f) else NeonPurple.copy(alpha = 0.2f)
+                            )
+                            .border(
+                                1.dp,
+                                if (isManualSelection) NeonCyan.copy(alpha = 0.7f) else NeonPurple.copy(alpha = 0.6f),
+                                RoundedCornerShape(8.dp)
+                            )
                             .padding(horizontal = 8.dp, vertical = 4.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Icon(
-                            imageVector = Icons.Default.AutoAwesome,
+                            imageVector = if (isManualSelection) Icons.Default.FilterList else Icons.Default.AutoAwesome,
                             contentDescription = null,
-                            tint = NeonCyan,
+                            tint = if (isManualSelection) NeonCyan else NeonCyan,
                             modifier = Modifier.size(14.dp)
                         )
                         Spacer(modifier = Modifier.width(5.dp))
                         Text(
-                            text = "TÍTULO SORTEADO",
+                            text = if (isManualSelection) "ESCOLHIDO MANUALMENTE" else "TÍTULO SORTEADO",
                             color = NeonCyan,
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Black,
@@ -1017,3 +1093,269 @@ private fun RouletteSpotlightCard(
         }
     }
 }
+
+@Composable
+private fun ManualSelectionDialog(
+    titles: List<TitleEntity>,
+    activeTitleId: Long?,
+    cycleDrawnIds: Set<Long>,
+    onSelect: (TitleEntity) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var searchQuery by remember { mutableStateOf("") }
+    var selectedCategoryFilter by remember { mutableStateOf<Category?>(null) }
+
+    val filteredTitles = remember(titles, searchQuery, selectedCategoryFilter) {
+        titles.filter { title ->
+            val matchesQuery = searchQuery.isBlank() || title.name.contains(searchQuery, ignoreCase = true) || title.genre.contains(searchQuery, ignoreCase = true)
+            val matchesCat = selectedCategoryFilter == null || title.categoryEnum == selectedCategoryFilter
+            matchesQuery && matchesCat
+        }
+    }
+
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.85f))
+                .padding(16.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(600.dp)
+                    .clip(RoundedCornerShape(20.dp))
+                    .border(1.5.dp, NeonCyan, RoundedCornerShape(20.dp)),
+                colors = CardDefaults.cardColors(containerColor = GraphiteDark)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(16.dp)
+                ) {
+                    // Header
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.FilterList,
+                                contentDescription = null,
+                                tint = NeonCyan,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "SELEÇÃO MANUAL",
+                                color = TextPrimary,
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Black,
+                                letterSpacing = 1.sp
+                            )
+                        }
+
+                        IconButton(onClick = onDismiss) {
+                            Icon(imageVector = Icons.Default.Close, contentDescription = "Fechar", tint = TextSecondary)
+                        }
+                    }
+
+                    Text(
+                        text = "Escolha diretamente uma obra para a roleta. O título selecionado entrará no ciclo de repetição universal e não será repetido no sorteio automático subsequente.",
+                        color = TextSecondary,
+                        fontSize = 11.sp,
+                        lineHeight = 15.sp
+                    )
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    // Search input
+                    androidx.compose.material3.OutlinedTextField(
+                        value = searchQuery,
+                        onValueChange = { searchQuery = it },
+                        placeholder = { Text("Buscar por nome ou gênero...", fontSize = 12.sp, color = TextSecondary) },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        shape = RoundedCornerShape(12.dp),
+                        colors = androidx.compose.material3.OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = NeonCyan,
+                            unfocusedBorderColor = GraphiteBorder,
+                            focusedTextColor = TextPrimary,
+                            unfocusedTextColor = TextPrimary,
+                            cursorColor = NeonCyan
+                        )
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    // Category chips
+                    LazyRow(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        item {
+                            FilterChip(
+                                selected = selectedCategoryFilter == null,
+                                onClick = { selectedCategoryFilter = null },
+                                label = { Text("Todos", fontSize = 11.sp) },
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = NeonPurple,
+                                    selectedLabelColor = Color.White,
+                                    containerColor = GraphiteSurfaceVariant,
+                                    labelColor = TextSecondary
+                                )
+                            )
+                        }
+                        items(Category.entries) { cat ->
+                            val isSelected = selectedCategoryFilter == cat
+                            FilterChip(
+                                selected = isSelected,
+                                onClick = { selectedCategoryFilter = if (isSelected) null else cat },
+                                label = { Text(cat.displayName, fontSize = 11.sp) },
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = NeonCyan,
+                                    selectedLabelColor = Color.Black,
+                                    containerColor = GraphiteSurfaceVariant,
+                                    labelColor = TextSecondary
+                                )
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    // Title list
+                    if (filteredTitles.isEmpty()) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .weight(1f),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "Nenhum título encontrado.",
+                                color = TextSecondary,
+                                fontSize = 13.sp
+                            )
+                        }
+                    } else {
+                        LazyColumn(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .weight(1f),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            items(filteredTitles, key = { it.id }) { itemTitle ->
+                                val isCurrentActive = itemTitle.id == activeTitleId
+                                val hasBeenDrawnInCycle = cycleDrawnIds.contains(itemTitle.id)
+
+                                Card(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .clickable { onSelect(itemTitle) }
+                                        .border(
+                                            1.dp,
+                                            if (isCurrentActive) NeonCyan else GraphiteBorder,
+                                            RoundedCornerShape(12.dp)
+                                        ),
+                                    colors = CardDefaults.cardColors(
+                                        containerColor = if (isCurrentActive) NeonCyan.copy(alpha = 0.12f) else GraphiteSurface
+                                    )
+                                ) {
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(10.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        // Mini poster
+                                        Box(
+                                            modifier = Modifier
+                                                .size(width = 42.dp, height = 56.dp)
+                                                .clip(RoundedCornerShape(6.dp))
+                                                .background(GraphiteDark)
+                                        ) {
+                                            if (itemTitle.coverUrl.isNotBlank()) {
+                                                AsyncImage(
+                                                    model = itemTitle.coverUrl,
+                                                    contentDescription = itemTitle.name,
+                                                    contentScale = ContentScale.Crop,
+                                                    modifier = Modifier.fillMaxSize()
+                                                )
+                                            }
+                                        }
+
+                                        Spacer(modifier = Modifier.width(10.dp))
+
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(
+                                                text = itemTitle.name,
+                                                color = TextPrimary,
+                                                fontSize = 13.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                            Spacer(modifier = Modifier.height(2.dp))
+                                            Text(
+                                                text = "${itemTitle.categoryEnum.displayName} • ${itemTitle.releaseYear} • ${itemTitle.genre}",
+                                                color = TextSecondary,
+                                                fontSize = 10.sp
+                                            )
+                                            Spacer(modifier = Modifier.height(4.dp))
+                                            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                                if (isCurrentActive) {
+                                                    Box(
+                                                        modifier = Modifier
+                                                            .clip(RoundedCornerShape(4.dp))
+                                                            .background(NeonCyan.copy(alpha = 0.2f))
+                                                            .padding(horizontal = 5.dp, vertical = 2.dp)
+                                                    ) {
+                                                        Text("EM DESTAQUE NA ROLETA", color = NeonCyan, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                                                    }
+                                                }
+                                                if (hasBeenDrawnInCycle) {
+                                                    Box(
+                                                        modifier = Modifier
+                                                            .clip(RoundedCornerShape(4.dp))
+                                                            .background(NeonPurple.copy(alpha = 0.2f))
+                                                            .padding(horizontal = 5.dp, vertical = 2.dp)
+                                                    ) {
+                                                        Text("JÁ NO CICLO", color = NeonPurple, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                                                    }
+                                                }
+                                            }
+                                        }
+
+                                        Button(
+                                            onClick = { onSelect(itemTitle) },
+                                            colors = ButtonDefaults.buttonColors(
+                                                containerColor = if (isCurrentActive) NeonCyan else NeonPurple
+                                            ),
+                                            shape = RoundedCornerShape(8.dp),
+                                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+                                        ) {
+                                            Text(
+                                                text = if (isCurrentActive) "Ativo" else "Escolher",
+                                                color = if (isCurrentActive) Color.Black else Color.White,
+                                                fontSize = 11.sp,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+

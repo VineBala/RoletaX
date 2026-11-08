@@ -764,10 +764,12 @@ fun RouletteResultView(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        // Bloquear
+                        // Bloquear / Desbloquear
                         val isBlocked = editStatus == WatchStatus.BLOQUEADO
                         Button(
-                            onClick = { editStatus = WatchStatus.BLOQUEADO },
+                            onClick = {
+                                editStatus = if (isBlocked) WatchStatus.PENDENTE else WatchStatus.BLOQUEADO
+                            },
                             modifier = Modifier
                                 .weight(1f)
                                 .height(42.dp),
@@ -782,7 +784,7 @@ fun RouletteResultView(
                             contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 4.dp, vertical = 2.dp)
                         ) {
                             Text(
-                                text = "Bloquear",
+                                text = if (isBlocked) "Desbloquear" else "Bloquear",
                                 color = if (isBlocked) Color.White else TextPrimary,
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold

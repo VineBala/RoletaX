@@ -288,4 +288,81 @@ class ExampleRobolectricTest {
         org.junit.Assert.assertTrue(generatedFileName!!.startsWith("vortex_backup_"))
         org.junit.Assert.assertTrue(generatedFileName!!.endsWith(".zip"))
     }
+
+    @Test
+    fun `test manual selection in roulette and universal cycle non-repetition`() {
+        val titleA = TitleEntity(id = 101L, name = "Filme Alpha", category = Category.FILME.name)
+        val titleB = TitleEntity(id = 102L, name = "Filme Beta", category = Category.FILME.name)
+        val titleC = TitleEntity(id = 103L, name = "Filme Gama", category = Category.FILME.name)
+        val pool = listOf(titleA, titleB, titleC)
+
+        val app = ApplicationProvider.getApplicationContext<android.app.Application>()
+        val viewModel = com.example.viewmodel.SeraAkisosViewModel(app)
+        viewModel.resetRouletteCycle()
+
+        // 1. Seleciona manualmente o Filme Alpha
+        viewModel.selectManualTitle(titleA)
+        org.junit.Assert.assertTrue(viewModel.isManualSelection.value)
+        assertEquals(101L, viewModel.activeWinnerId.value)
+        org.junit.Assert.assertTrue(viewModel.rouletteDrawnCycleIds.value.contains(101L))
+
+        // 2. Agora sorteia automaticamente a partir do mesmo pool
+        // Por regra universal, Filme Alpha NÃO pode ser sorteado porque já está no ciclo
+        val secondPick = viewModel.drawRouletteTitle(candidatesSource = pool)
+        org.junit.Assert.assertNotNull(secondPick)
+        org.junit.Assert.assertFalse(viewModel.isManualSelection.value)
+        org.junit.Assert.assertNotEquals(101L, secondPick!!.id)
+        org.junit.Assert.assertTrue(secondPick.id == 102L || secondPick.id == 103L)
+
+        // 3. Sorteia o terceiro título do ciclo
+        val thirdPick = viewModel.drawRouletteTitle(candidatesSource = pool)
+        org.junit.Assert.assertNotNull(thirdPick)
+        org.junit.Assert.assertNotEquals(101L, thirdPick!!.id)
+        org.junit.Assert.assertNotEquals(secondPick.id, thirdPick.id)
+
+        // Todos os 3 títulos agora participaram do ciclo
+        assertEquals(3, viewModel.rouletteDrawnCycleIds.value.size)
+
+        // 4. No 4º sorteio, o ciclo se reinicia automaticamente
+        val fourthPick = viewModel.drawRouletteTitle(candidatesSource = pool)
+        org.junit.Assert.assertNotNull(fourthPick)
+        assertEquals(1, viewModel.rouletteDrawnCycleIds.value.size)
+    }
+
+    @Test
+    fun `test toggleBlocked sets status and skips blocked titles in update checking`() = runBlocking {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val db = com.example.data.local.AppDatabase.getDatabase(context)
+        val repository = com.example.data.repository.TitleRepository(db.titleDao())
+
+        val series = TitleEntity(
+            id = 555L,
+            name = "Série Congelada",
+            category = Category.SERIE.name,
+            status = WatchStatus.PENDENTE.name,
+            totalEpisodes = 10
+        )
+        db.titleDao().insert(series)
+
+        // 1. Bloquear
+        val isNowBlocked = repository.toggleBlocked(555L)
+        org.junit.Assert.assertTrue(isNowBlocked)
+        val blockedItem = db.titleDao().getTitleById(555L).first()
+        assertEquals(WatchStatus.BLOQUEADO.name, blockedItem?.status)
+
+        // 2. Verificar que checkSingleTitleUpdate ignora título bloqueado
+        val updateResult = repository.checkSingleTitleUpdate(555L)
+        org.junit.Assert.assertNull(updateResult)
+
+        // 3. Desbloquear
+        val isUnblocked = repository.toggleBlocked(555L)
+        org.junit.Assert.assertFalse(isUnblocked)
+        val unblockedItem = db.titleDao().getTitleById(555L).first()
+        assertEquals(WatchStatus.PENDENTE.name, unblockedItem?.status)
+    }
+
+    @Test
+    fun `test version name is dynamic 2 dot 1`() {
+        assertEquals("2.1", BuildConfig.VERSION_NAME)
+    }
 }
