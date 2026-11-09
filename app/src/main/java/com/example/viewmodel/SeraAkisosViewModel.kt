@@ -245,12 +245,12 @@ class SeraAkisosViewModel(application: Application) : AndroidViewModel(applicati
         }
 
         if (criteria.query.isNotBlank()) {
-            val q = criteria.query.trim().lowercase()
             list = list.filter {
-                it.name.lowercase().contains(q) ||
-                it.genre.lowercase().contains(q) ||
-                it.synopsis.lowercase().contains(q) ||
-                it.releaseYear.toString().contains(q)
+                com.example.util.TitleSearchHelper.matchesQuery(
+                    query = criteria.query,
+                    targetTitle = it.name,
+                    extraSearchFields = listOf(it.genre, it.synopsis, it.releaseYear.toString(), it.notes)
+                )
             }
         }
 
@@ -416,13 +416,19 @@ class SeraAkisosViewModel(application: Application) : AndroidViewModel(applicati
     fun toggleTitleCompleted(title: TitleEntity) {
         viewModelScope.launch {
             val isNowCompleted = title.statusEnum != WatchStatus.COMPLETO
-            val newStatus = if (isNowCompleted) WatchStatus.COMPLETO.name else WatchStatus.PENDENTE.name
+            val newStatus = if (isNowCompleted) {
+                WatchStatus.COMPLETO.name
+            } else {
+                if (title.isMovie) {
+                    WatchStatus.PENDENTE.name
+                } else {
+                    if (title.currentEpisode > 0 || title.currentSeason > 1) WatchStatus.EM_ANDAMENTO.name else WatchStatus.PENDENTE.name
+                }
+            }
             val newCompletedAt = if (isNowCompleted) (title.completedAt ?: System.currentTimeMillis()) else null
-            val newSeason = if (isNowCompleted && !title.isMovie) title.totalSeasons.coerceAtLeast(1) else if (!isNowCompleted && !title.isMovie) 1 else title.currentSeason
+            val newSeason = if (isNowCompleted && !title.isMovie) title.totalSeasons.coerceAtLeast(1) else title.currentSeason
             val newEpisode = if (isNowCompleted && !title.isMovie) {
                 if (title.totalSeasons <= 1) title.totalEpisodes.coerceAtLeast(1) else title.effectiveEpisodesPerSeason
-            } else if (!isNowCompleted && !title.isMovie) {
-                0
             } else {
                 title.currentEpisode
             }
@@ -439,7 +445,7 @@ class SeraAkisosViewModel(application: Application) : AndroidViewModel(applicati
             if (_selectedTitle.value?.id == title.id) {
                 _selectedTitle.value = updated
             }
-            val msg = if (isNowCompleted) "Título '${title.name}' marcado como Concluído!" else "Título '${title.name}' desmarcado de Concluído."
+            val msg = if (isNowCompleted) "Título '${title.name}' marcado como Concluído!" else "Status de '${title.name}' revertido com sucesso!"
             showMessage(msg)
         }
     }

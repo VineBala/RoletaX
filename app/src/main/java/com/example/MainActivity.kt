@@ -165,6 +165,9 @@ fun SeraAkisosApp(viewModel: SeraAkisosViewModel) {
             },
             onCheckUpdates = {
                 viewModel.syncSingleTitle(title)
+            },
+            onSaveManualProgress = { updated ->
+                viewModel.updateTitleDirectly(updated)
             }
         )
     }

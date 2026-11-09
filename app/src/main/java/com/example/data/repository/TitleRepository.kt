@@ -104,7 +104,15 @@ class TitleRepository(
     suspend fun toggleTitleCompleted(id: Long) = withContext(Dispatchers.IO) {
         val current = titleDao.getTitleById(id).first() ?: return@withContext
         val isNowCompleted = current.statusEnum != WatchStatus.COMPLETO
-        val newStatus = if (isNowCompleted) WatchStatus.COMPLETO.name else WatchStatus.PENDENTE.name
+        val newStatus = if (isNowCompleted) {
+            WatchStatus.COMPLETO.name
+        } else {
+            if (current.isMovie) {
+                WatchStatus.PENDENTE.name
+            } else {
+                if (current.currentEpisode > 0 || current.currentSeason > 1) WatchStatus.EM_ANDAMENTO.name else WatchStatus.PENDENTE.name
+            }
+        }
         val newCompletedAt = if (isNowCompleted) (current.completedAt ?: System.currentTimeMillis()) else null
 
         val updated = if (current.isMovie) {
@@ -119,7 +127,7 @@ class TitleRepository(
             val newEpisode = if (isNowCompleted) {
                 if (current.totalSeasons <= 1) current.totalEpisodes.coerceAtLeast(1) else current.effectiveEpisodesPerSeason
             } else {
-                0
+                current.currentEpisode
             }
             current.copy(
                 status = newStatus,
@@ -323,6 +331,7 @@ class TitleRepository(
             obj.put("currentSeason", item.currentSeason)
             obj.put("currentEpisode", item.currentEpisode)
             obj.put("totalEpisodes", item.totalEpisodes)
+            obj.put("lastWatchedAt", item.lastWatchedAt ?: 0L)
             obj.put("duration", item.duration)
             obj.put("isIgnored", item.isIgnored)
             if (item.completedAt != null) {
@@ -337,7 +346,7 @@ class TitleRepository(
         }
         val root = JSONObject()
         root.put("app", "Vortex")
-        root.put("version", "2.0")
+        root.put("version", "2.1")
         root.put("exportedAt", System.currentTimeMillis())
         root.put("titles", array)
         return root.toString(2)
@@ -406,6 +415,9 @@ class TitleRepository(
                 null
             }
 
+            val rawLastWatched = obj.optLong("lastWatchedAt", 0L)
+            val parsedLastWatched = if (rawLastWatched > 0L) rawLastWatched else null
+
             val entity = TitleEntity(
                 name = obj.optString("name", "Sem Nome"),
                 coverUrl = obj.optString("coverUrl", ""),
@@ -413,11 +425,11 @@ class TitleRepository(
                 category = categoryStr,
                 releaseYear = obj.optInt("releaseYear", 2024),
                 genre = obj.optString("genre", "Geral"),
-                totalSeasons = if (isMovie) 0 else obj.optInt("totalSeasons", 1),
-                episodesPerSeason = if (isMovie) 0 else obj.optInt("episodesPerSeason", 1),
-                currentSeason = if (isMovie) 0 else obj.optInt("currentSeason", 1),
-                currentEpisode = if (isMovie) 0 else obj.optInt("currentEpisode", 0),
-                totalEpisodes = if (isMovie) 0 else obj.optInt("totalEpisodes", 1),
+                totalSeasons = if (isMovie) 0 else obj.optInt("totalSeasons", 1).coerceAtLeast(1),
+                episodesPerSeason = if (isMovie) 0 else obj.optInt("episodesPerSeason", 1).coerceAtLeast(1),
+                currentSeason = if (isMovie) 0 else obj.optInt("currentSeason", 1).coerceAtLeast(1),
+                currentEpisode = if (isMovie) 0 else obj.optInt("currentEpisode", 0).coerceAtLeast(0),
+                totalEpisodes = if (isMovie) 0 else obj.optInt("totalEpisodes", 1).coerceAtLeast(1),
                 duration = obj.optString("duration", ""),
                 isIgnored = obj.optBoolean("isIgnored", false),
                 completedAt = parsedCompletedAt,
@@ -425,9 +437,10 @@ class TitleRepository(
                 personalRating = obj.optDouble("personalRating", 0.0).toFloat(),
                 notes = obj.optString("notes", ""),
                 createdAt = obj.optLong("createdAt", System.currentTimeMillis()),
-                updatedAt = System.currentTimeMillis()
+                updatedAt = System.currentTimeMillis(),
+                lastWatchedAt = parsedLastWatched
             )
-            imported.add(applyStatusAutomation(entity))
+            imported.add(entity)
         }
 
         if (imported.isNotEmpty()) {

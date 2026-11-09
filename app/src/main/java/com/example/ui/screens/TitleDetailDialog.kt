@@ -29,6 +29,7 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Sync
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -38,12 +39,15 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -75,13 +79,14 @@ import com.example.ui.theme.TextSecondary
 fun TitleDetailDialog(
     title: TitleEntity,
     onDismiss: () -> Unit,
-    onAdvanceEpisode: (Int) -> Unit,
+    onAdvanceEpisode: (Int) -> Unit = {},
     onToggleMovieWatched: () -> Unit,
     onUpdateStatus: (WatchStatus) -> Unit,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
     onToggleIgnore: () -> Unit = {},
-    onCheckUpdates: () -> Unit = {}
+    onCheckUpdates: () -> Unit = {},
+    onSaveManualProgress: (TitleEntity) -> Unit = {}
 ) {
     var showDeleteConfirm by remember { mutableStateOf(false) }
 
@@ -373,58 +378,141 @@ fun TitleDetailDialog(
                                     )
                                 }
                             } else {
-                                // Series & Anime Episode Controls (-1 and +1)
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
+                                // Controle manual direto de progresso para Séries e Animes
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(GraphiteSurfaceVariant)
+                                        .border(1.dp, GraphiteBorder, RoundedCornerShape(12.dp))
+                                        .padding(12.dp),
+                                    verticalArrangement = Arrangement.spacedBy(10.dp)
                                 ) {
                                     Text(
-                                        text = "Episódio ${title.currentEpisode} de ${title.totalEpisodes}",
-                                        color = TextSecondary,
-                                        fontSize = 12.sp
+                                        text = "EDIÇÃO MANUAL DE PROGRESSO",
+                                        color = NeonCyan,
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        letterSpacing = 0.8.sp
                                     )
 
-                                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                                        // -1 Ep
-                                        Box(
-                                            modifier = Modifier
-                                                .size(38.dp)
-                                                .clip(CircleShape)
-                                                .background(GraphiteSurfaceVariant)
-                                                .border(1.dp, GraphiteBorder, CircleShape)
-                                                .clickable(enabled = title.currentEpisode > 0) {
-                                                    onAdvanceEpisode(-1)
-                                                },
-                                            contentAlignment = Alignment.Center
-                                        ) {
-                                            Icon(
-                                                imageVector = Icons.Default.Remove,
-                                                contentDescription = "Retroceder episódio",
-                                                tint = if (title.currentEpisode > 0) Color.White else TextSecondary.copy(alpha = 0.3f),
-                                                modifier = Modifier.size(18.dp)
-                                            )
-                                        }
+                                    var inputCurrentSeason by remember(title.id, title.currentSeason) {
+                                        mutableStateOf(title.currentSeason.toString())
+                                    }
+                                    var inputCurrentEpisode by remember(title.id, title.currentEpisode) {
+                                        mutableStateOf(title.currentEpisode.toString())
+                                    }
+                                    var inputTotalSeasons by remember(title.id, title.totalSeasons) {
+                                        mutableStateOf(title.totalSeasons.toString())
+                                    }
+                                    var inputTotalEpisodes by remember(title.id, title.totalEpisodes) {
+                                        mutableStateOf(title.totalEpisodes.toString())
+                                    }
 
-                                        // +1 Ep
-                                        Box(
-                                            modifier = Modifier
-                                                .size(38.dp)
-                                                .clip(CircleShape)
-                                                .background(NeonCyan.copy(alpha = 0.2f))
-                                                .border(1.dp, NeonCyan, CircleShape)
-                                                .clickable(enabled = title.currentEpisode < title.totalEpisodes) {
-                                                    onAdvanceEpisode(1)
-                                                },
-                                            contentAlignment = Alignment.Center
-                                        ) {
-                                            Icon(
-                                                imageVector = Icons.Default.Add,
-                                                contentDescription = "Avançar episódio",
-                                                tint = NeonCyan,
-                                                modifier = Modifier.size(18.dp)
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        OutlinedTextField(
+                                            value = inputCurrentSeason,
+                                            onValueChange = { newVal ->
+                                                inputCurrentSeason = newVal
+                                                val parsed = newVal.toIntOrNull()
+                                                if (parsed != null && parsed >= 1) {
+                                                    onSaveManualProgress(
+                                                        title.copy(currentSeason = parsed)
+                                                    )
+                                                }
+                                            },
+                                            label = { Text("Temp. Atual", fontSize = 10.sp) },
+                                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                            singleLine = true,
+                                            modifier = Modifier.weight(1f),
+                                            shape = RoundedCornerShape(8.dp),
+                                            colors = OutlinedTextFieldDefaults.colors(
+                                                focusedBorderColor = NeonCyan,
+                                                unfocusedBorderColor = GraphiteBorder,
+                                                focusedTextColor = TextPrimary,
+                                                unfocusedTextColor = TextPrimary
                                             )
-                                        }
+                                        )
+
+                                        OutlinedTextField(
+                                            value = inputCurrentEpisode,
+                                            onValueChange = { newVal ->
+                                                inputCurrentEpisode = newVal
+                                                val parsed = newVal.toIntOrNull()
+                                                if (parsed != null && parsed >= 0) {
+                                                    onSaveManualProgress(
+                                                        title.copy(currentEpisode = parsed)
+                                                    )
+                                                }
+                                            },
+                                            label = { Text("Ep. Atual", fontSize = 10.sp) },
+                                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                            singleLine = true,
+                                            modifier = Modifier.weight(1f),
+                                            shape = RoundedCornerShape(8.dp),
+                                            colors = OutlinedTextFieldDefaults.colors(
+                                                focusedBorderColor = NeonCyan,
+                                                unfocusedBorderColor = GraphiteBorder,
+                                                focusedTextColor = TextPrimary,
+                                                unfocusedTextColor = TextPrimary
+                                            )
+                                        )
+                                    }
+
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        OutlinedTextField(
+                                            value = inputTotalSeasons,
+                                            onValueChange = { newVal ->
+                                                inputTotalSeasons = newVal
+                                                val parsed = newVal.toIntOrNull()
+                                                if (parsed != null && parsed >= 1) {
+                                                    onSaveManualProgress(
+                                                        title.copy(totalSeasons = parsed)
+                                                    )
+                                                }
+                                            },
+                                            label = { Text("Temp. Total", fontSize = 10.sp) },
+                                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                            singleLine = true,
+                                            modifier = Modifier.weight(1f),
+                                            shape = RoundedCornerShape(8.dp),
+                                            colors = OutlinedTextFieldDefaults.colors(
+                                                focusedBorderColor = NeonPurple,
+                                                unfocusedBorderColor = GraphiteBorder,
+                                                focusedTextColor = TextPrimary,
+                                                unfocusedTextColor = TextPrimary
+                                            )
+                                        )
+
+                                        OutlinedTextField(
+                                            value = inputTotalEpisodes,
+                                            onValueChange = { newVal ->
+                                                inputTotalEpisodes = newVal
+                                                val parsed = newVal.toIntOrNull()
+                                                if (parsed != null && parsed >= 1) {
+                                                    onSaveManualProgress(
+                                                        title.copy(totalEpisodes = parsed)
+                                                    )
+                                                }
+                                            },
+                                            label = { Text("Ep. Total", fontSize = 10.sp) },
+                                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                            singleLine = true,
+                                            modifier = Modifier.weight(1f),
+                                            shape = RoundedCornerShape(8.dp),
+                                            colors = OutlinedTextFieldDefaults.colors(
+                                                focusedBorderColor = NeonPurple,
+                                                unfocusedBorderColor = GraphiteBorder,
+                                                focusedTextColor = TextPrimary,
+                                                unfocusedTextColor = TextPrimary
+                                            )
+                                        )
                                     }
                                 }
                             }

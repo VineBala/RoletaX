@@ -363,11 +363,7 @@ fun RouletteScreen(
                 onOpenDetails = { viewModel.setShowRouletteResult(true) },
                 onQuickAction = {
                     activeRouletteTitle?.let { title ->
-                        if (title.isMovie) {
-                            viewModel.toggleMovieWatched(title)
-                        } else {
-                            viewModel.advanceEpisode(title, 1)
-                        }
+                        viewModel.toggleTitleCompleted(title)
                     }
                 }
             )
@@ -1010,16 +1006,18 @@ private fun RouletteSpotlightCard(
                             .weight(1f)
                             .height(42.dp),
                         shape = RoundedCornerShape(10.dp),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, NeonCyan.copy(alpha = 0.7f)),
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = NeonCyan)
+                        border = androidx.compose.foundation.BorderStroke(
+                            1.dp,
+                            if (title.statusEnum == WatchStatus.COMPLETO) NeonPurple else NeonCyan.copy(alpha = 0.7f)
+                        ),
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            containerColor = if (title.statusEnum == WatchStatus.COMPLETO) NeonPurple.copy(alpha = 0.15f) else Color.Transparent,
+                            contentColor = if (title.statusEnum == WatchStatus.COMPLETO) NeonPurple else NeonCyan
+                        )
                     ) {
                         Text(
-                            text = if (title.isMovie) {
-                                if (title.statusEnum == WatchStatus.COMPLETO) "Desmarcar" else "Concluir"
-                            } else {
-                                "+1 Episódio"
-                            },
-                            color = NeonCyan,
+                            text = if (title.statusEnum == WatchStatus.COMPLETO) "Desmarcar" else "Concluir",
+                            color = if (title.statusEnum == WatchStatus.COMPLETO) NeonPurple else NeonCyan,
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold
                         )
@@ -1107,7 +1105,11 @@ private fun ManualSelectionDialog(
 
     val filteredTitles = remember(titles, searchQuery, selectedCategoryFilter) {
         titles.filter { title ->
-            val matchesQuery = searchQuery.isBlank() || title.name.contains(searchQuery, ignoreCase = true) || title.genre.contains(searchQuery, ignoreCase = true)
+            val matchesQuery = com.example.util.TitleSearchHelper.matchesQuery(
+                query = searchQuery,
+                targetTitle = title.name,
+                extraSearchFields = listOf(title.genre, title.synopsis, title.releaseYear.toString())
+            )
             val matchesCat = selectedCategoryFilter == null || title.categoryEnum == selectedCategoryFilter
             matchesQuery && matchesCat
         }

@@ -503,61 +503,20 @@ fun RouletteResultView(
                                 )
 
                                 Row(
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    // -1 Ep
-                                    Box(
-                                        modifier = Modifier
-                                            .size(36.dp)
-                                            .clip(CircleShape)
-                                            .background(GraphiteDark)
-                                            .border(1.dp, GraphiteBorder, CircleShape)
-                                            .clickable(enabled = title.currentEpisode > 0) {
-                                                onAdvanceEpisode(-1)
-                                            },
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.Remove,
-                                            contentDescription = "Voltar 1 episódio",
-                                            tint = if (title.currentEpisode > 0) NeonCyan else TextSecondary.copy(alpha = 0.4f),
-                                            modifier = Modifier.size(16.dp)
-                                        )
-                                    }
-
-                                    // Ep display
                                     Box(
                                         modifier = Modifier
                                             .clip(RoundedCornerShape(8.dp))
                                             .background(GraphiteDark)
-                                            .padding(horizontal = 10.dp, vertical = 6.dp)
+                                            .border(1.dp, NeonCyan.copy(alpha = 0.35f), RoundedCornerShape(8.dp))
+                                            .padding(horizontal = 12.dp, vertical = 6.dp)
                                     ) {
                                         Text(
-                                            text = "Ep. ${title.currentEpisode}",
-                                            color = TextPrimary,
+                                            text = "Ep. ${title.currentEpisode} de ${title.totalEpisodes}",
+                                            color = NeonCyan,
                                             fontSize = 12.sp,
                                             fontWeight = FontWeight.Bold
-                                        )
-                                    }
-
-                                    // +1 Ep
-                                    Box(
-                                        modifier = Modifier
-                                            .size(36.dp)
-                                            .clip(CircleShape)
-                                            .background(NeonCyan.copy(alpha = 0.2f))
-                                            .border(1.dp, NeonCyan, CircleShape)
-                                            .clickable(enabled = title.currentEpisode < title.totalEpisodes) {
-                                                onAdvanceEpisode(1)
-                                            },
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.Add,
-                                            contentDescription = "Avançar 1 episódio",
-                                            tint = NeonCyan,
-                                            modifier = Modifier.size(16.dp)
                                         )
                                     }
                                 }
@@ -791,10 +750,16 @@ fun RouletteResultView(
                             )
                         }
 
-                        // Concluir
+                        // Concluir / Desmarcar
                         val isCompleted = editStatus == WatchStatus.COMPLETO
                         Button(
-                            onClick = { editStatus = WatchStatus.COMPLETO },
+                            onClick = {
+                                editStatus = if (isCompleted) {
+                                    if (title.currentEpisode > 0 || title.currentSeason > 1) WatchStatus.EM_ANDAMENTO else WatchStatus.PENDENTE
+                                } else {
+                                    WatchStatus.COMPLETO
+                                }
+                            },
                             modifier = Modifier
                                 .weight(1f)
                                 .height(42.dp),
@@ -809,7 +774,7 @@ fun RouletteResultView(
                             contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 4.dp, vertical = 2.dp)
                         ) {
                             Text(
-                                text = "Concluir",
+                                text = if (isCompleted) "Concluído" else "Concluir",
                                 color = if (isCompleted) Color.White else TextPrimary,
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold

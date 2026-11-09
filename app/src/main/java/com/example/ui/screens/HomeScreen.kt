@@ -473,8 +473,7 @@ fun HomeScreen(
                         items(inProgressTitles, key = { it.id }) { title ->
                             InProgressHorizontalCard(
                                 title = title,
-                                onCardClick = { viewModel.openTitleDetails(title) },
-                                onAdvanceEp = { viewModel.advanceEpisode(title, 1) }
+                                onCardClick = { viewModel.openTitleDetails(title) }
                             )
                         }
                     }
@@ -638,8 +637,7 @@ private fun CategoryShortcut(
 @Composable
 private fun InProgressHorizontalCard(
     title: TitleEntity,
-    onCardClick: () -> Unit,
-    onAdvanceEp: () -> Unit
+    onCardClick: () -> Unit
 ) {
     Card(
         modifier = Modifier
@@ -663,28 +661,6 @@ private fun InProgressHorizontalCard(
                         contentScale = androidx.compose.ui.layout.ContentScale.Crop,
                         modifier = Modifier.fillMaxSize()
                     )
-                }
-
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .padding(6.dp)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(30.dp)
-                            .clip(CircleShape)
-                            .background(NeonCyan)
-                            .clickable(onClick = onAdvanceEp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Add,
-                            contentDescription = "Avançar",
-                            tint = Color.Black,
-                            modifier = Modifier.size(16.dp)
-                        )
-                    }
                 }
             }
 

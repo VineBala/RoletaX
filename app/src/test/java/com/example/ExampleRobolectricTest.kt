@@ -362,6 +362,102 @@ class ExampleRobolectricTest {
     }
 
     @Test
+    fun `test revert completed status preserves progress and returns to in progress`() = runBlocking {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val db = com.example.data.local.AppDatabase.getDatabase(context)
+        val repository = com.example.data.repository.TitleRepository(db.titleDao())
+
+        val title = TitleEntity(
+            id = 777L,
+            name = "Solo Leveling",
+            category = Category.ANIME.name,
+            totalSeasons = 1,
+            episodesPerSeason = 12,
+            currentSeason = 1,
+            currentEpisode = 8,
+            totalEpisodes = 12,
+            status = WatchStatus.EM_ANDAMENTO.name
+        )
+        db.titleDao().insert(title)
+
+        // 1. Marca como concluído
+        repository.toggleTitleCompleted(777L)
+        val completed = db.titleDao().getTitleById(777L).first()
+        org.junit.Assert.assertNotNull(completed)
+        assertEquals(WatchStatus.COMPLETO.name, completed!!.status)
+        org.junit.Assert.assertNotNull(completed.completedAt)
+
+        // 2. Reverte o status de concluído
+        repository.toggleTitleCompleted(777L)
+        val reverted = db.titleDao().getTitleById(777L).first()
+        org.junit.Assert.assertNotNull(reverted)
+        assertEquals(WatchStatus.EM_ANDAMENTO.name, reverted!!.status)
+        org.junit.Assert.assertNull(reverted.completedAt)
+        // O progresso não é zerado para 0
+        assertEquals(1, reverted.currentSeason)
+        org.junit.Assert.assertTrue((reverted.currentEpisode) > 0)
+    }
+
+    @Test
+    fun `test zip backup export and import preserves exact episode and season progress`() = runBlocking {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val db = com.example.data.local.AppDatabase.getDatabase(context)
+        val repository = com.example.data.repository.TitleRepository(db.titleDao())
+
+        val original = TitleEntity(
+            name = "Frieren",
+            category = Category.ANIME.name,
+            totalSeasons = 1,
+            episodesPerSeason = 28,
+            currentSeason = 1,
+            currentEpisode = 17,
+            totalEpisodes = 28,
+            status = WatchStatus.EM_ANDAMENTO.name
+        )
+
+        val outStream = java.io.ByteArrayOutputStream()
+        repository.exportToZip(listOf(original), outStream)
+        val zipBytes = outStream.toByteArray()
+
+        val jsonStr = repository.readBackupStream(java.io.ByteArrayInputStream(zipBytes))
+        db.titleDao().deleteAll()
+
+        val count = repository.importFromJson(jsonStr)
+        assertEquals(1, count)
+
+        val imported = db.titleDao().getAllTitles().first().first()
+        assertEquals("Frieren", imported.name)
+        assertEquals(1, imported.currentSeason)
+        assertEquals(17, imported.currentEpisode)
+        assertEquals(28, imported.totalEpisodes)
+        assertEquals(WatchStatus.EM_ANDAMENTO.name, imported.status)
+    }
+
+    @Test
+    fun `test library search matches portuguese terms and synonyms`() {
+        // Exemplo direto do usuário: Buscar por "Chaves" localiza "El Chavo del Ocho"
+        val chavesMatch = com.example.util.TitleSearchHelper.matchesQuery(
+            query = "Chaves",
+            targetTitle = "El Chavo del Ocho"
+        )
+        org.junit.Assert.assertTrue("Busca por 'Chaves' deve localizar 'El Chavo del Ocho'", chavesMatch)
+
+        // Busca por "Ataque dos Titãs" localiza "Attack on Titan" / "Shingeki no Kyojin"
+        val aotMatch = com.example.util.TitleSearchHelper.matchesQuery(
+            query = "Ataque dos Titãs",
+            targetTitle = "Attack on Titan"
+        )
+        org.junit.Assert.assertTrue("Busca por 'Ataque dos Titãs' deve localizar 'Attack on Titan'", aotMatch)
+
+        // Busca sem acento localiza com acento
+        val interestelarMatch = com.example.util.TitleSearchHelper.matchesQuery(
+            query = "interstellar",
+            targetTitle = "Interestelar"
+        )
+        org.junit.Assert.assertTrue(interestelarMatch)
+    }
+
+    @Test
     fun `test version name is dynamic 2 dot 1`() {
         assertEquals("2.1", BuildConfig.VERSION_NAME)
     }
